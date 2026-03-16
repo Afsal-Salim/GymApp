@@ -1,11 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.core.mail import send_mail
 
 from django.conf import settings
 
 from core.logging import app_logger
 
+from .models import EmailOTP
+from .utils import generate_otp
 from .tokens import (
     create_access_token,
     create_refresh_token,
@@ -15,24 +18,172 @@ from .tokens import (
 from .models import Customer
 from .serializers import SignupSerializer, LoginSerializer, CustomerSerializer
 
+class SendOTPView(APIView):
+    """
+    POST /api/auth/send-otp/
+
+    Sends an OTP to the provided email for verification.
+    - Validates that email is provided.
+    - Generates a 6-digit OTP.
+    - Stores OTP and a unique token in EmailOTP model.
+    - Sends OTP to the user's email.
+    - Returns a token used later for OTP verification.
+    """
+
+    def post(self, request):
+        email = request.data.get("email")
+
+        if not email:
+            app_logger.warning(
+                "OTP send attempt without email",
+            )
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp = generate_otp()
+
+        otp_obj = EmailOTP.objects.create(
+            email=email,
+            otp=otp
+        )
+
+        send_mail(
+            subject="Your OTP Code",
+            message=f"Your verification OTP is {otp}",
+            from_email="noreply@yourapp.com",
+            recipient_list=[email],
+        )
+
+        app_logger.info(
+            "OTP sent to email",
+            email=email,
+            otp_id=otp_obj.id,
+            token=str(otp_obj.token),
+        )
+
+        return Response(
+            {
+                "message": "OTP sent to email",
+                "token": otp_obj.token
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyOTPView(APIView):
+    """
+    POST /api/auth/verify-otp/
+
+    Verifies the OTP sent to the user's email.
+    - Validates token and OTP.
+    - Checks if OTP exists and is not expired.
+    - Marks the OTP as verified.
+    - Allows the user to proceed with account creation.
+    """
+
+    def post(self, request):
+        token = request.data.get("token")
+        otp = request.data.get("otp")
+
+        try:
+            otp_obj = EmailOTP.objects.get(token=token)
+
+        except EmailOTP.DoesNotExist:
+            app_logger.warning(
+                "OTP verification failed - invalid token",
+                token=token,
+            )
+            return Response(
+                {"error": "Invalid token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_obj.is_expired():
+            app_logger.warning(
+                "OTP verification failed - OTP expired",
+                email=otp_obj.email,
+                token=str(token),
+            )
+            return Response(
+                {"error": "OTP expired"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_obj.otp != otp:
+            app_logger.warning(
+                "OTP verification failed - incorrect OTP",
+                email=otp_obj.email,
+                token=str(token),
+            )
+            return Response(
+                {"error": "Invalid OTP"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_obj.is_verified = True
+        otp_obj.save()
+
+        app_logger.info(
+            "OTP verified successfully",
+            email=otp_obj.email,
+            token=str(token),
+        )
+
+        return Response({"message": "Email verified"})
+
 
 class SignupView(APIView):
     """
     POST /api/auth/signup/
 
-    Creates a new customer.
+    Creates a new customer account after email verification.
     - Validates email, username, and password via SignupSerializer.
+    - Ensures the email has been verified via OTP.
     - Hashes and stores password on the Customer model.
     - Returns customer data plus access and refresh tokens.
     """
+
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
+
         if not serializer.is_valid():
+            app_logger.warning(
+                "Signup validation failed",
+                errors=serializer.errors,
+            )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
         username = serializer.validated_data["username"]
+        token = request.data.get("token")
+
+        try:
+            otp_obj = EmailOTP.objects.get(email=email, token=token)
+
+        except EmailOTP.DoesNotExist:
+            app_logger.warning(
+                "Signup attempt without OTP verification",
+                email=email,
+                token=token,
+            )
+            return Response(
+                {"error": "OTP verification required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not otp_obj.is_verified:
+            app_logger.warning(
+                "Signup blocked - email not verified",
+                email=email,
+                token=token,
+            )
+            return Response(
+                {"error": "Email not verified"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         customer = Customer(email=email, username=username)
         customer.set_password(password)
