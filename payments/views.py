@@ -1,3 +1,203 @@
-from django.shortcuts import render
+from decimal import Decimal
+from datetime import timedelta
 
-# Create your views here.
+import razorpay
+from django.conf import settings
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+
+from authentication.models import Customer
+from subscriptions.models import Subscription
+
+from .models import Payment
+from .serializers import (
+    PaymentSerializer,
+    CreateOrderSerializer,
+    VerifyPaymentSerializer,
+)
+
+
+def _get_razorpay_client():
+    key_id = getattr(settings, "RAZORPAY_KEY_ID", "") or ""
+    key_secret = getattr(settings, "RAZORPAY_KEY_SECRET", "") or ""
+    return razorpay.Client(auth=(key_id, key_secret))
+
+
+class CreateOrderView(APIView):
+    """
+    POST /api/payments/create-order/
+
+    No login required. Creates a Razorpay order if the email owns the business
+    for the given slug. Only the account that owns the business (email match)
+    can create an order for that slug.
+    """
+
+    def post(self, request):
+        serializer = CreateOrderSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower()
+        try:
+            customer = Customer.objects.get(email__iexact=email)
+        except Customer.DoesNotExist:
+            return Response(
+                {"detail": "No account found for this email."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        business = serializer.validated_data["business_id"]
+        if business.owner_id != customer.id:
+            return Response(
+                {"detail": "This business is not linked to this email."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            return Response(
+                {"detail": "Razorpay is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        amount = serializer.validated_data["amount"]
+        currency = serializer.validated_data.get("currency", "INR")
+        # Razorpay expects amount in smallest currency unit (paise for INR)
+        amount_paise = int(amount * 100)
+
+        try:
+            client = _get_razorpay_client()
+            order = client.order.create(
+                data={
+                    "amount": amount_paise,
+                    "currency": currency,
+                }
+            )
+        except Exception as e:
+            return Response(
+                {"detail": "Failed to create order.", "error": str(e)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "order_id": order["id"],
+                "amount": amount_paise,
+                "currency": currency,
+                "key_id": settings.RAZORPAY_KEY_ID,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VerifyPaymentView(APIView):
+    """
+    POST /api/payments/verify/
+
+    No login required. Verifies Razorpay signature and creates Payment
+    (and optionally Subscription). Email must be the owner of the business
+    for the given slug.
+    """
+
+    def post(self, request):
+        serializer = VerifyPaymentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower()
+        try:
+            customer = Customer.objects.get(email__iexact=email)
+        except Customer.DoesNotExist:
+            return Response(
+                {"detail": "No account found for this email."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        business = serializer.validated_data["business_id"]
+        if business.owner_id != customer.id:
+            return Response(
+                {"detail": "This business is not linked to this email."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not settings.RAZORPAY_KEY_SECRET:
+            return Response(
+                {"detail": "Razorpay is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        order_id = serializer.validated_data["razorpay_order_id"]
+        payment_id = serializer.validated_data["razorpay_payment_id"]
+        signature = serializer.validated_data["razorpay_signature"]
+        plan = serializer.validated_data.get("plan_id")
+
+        try:
+            client = _get_razorpay_client()
+            util = razorpay.Utility(client)
+            util.verify_payment_signature(
+                {
+                    "razorpay_order_id": order_id,
+                    "razorpay_payment_id": payment_id,
+                    "razorpay_signature": signature,
+                }
+            )
+        except razorpay.errors.SignatureVerificationError:
+            return Response(
+                {"detail": "Payment signature verification failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {"detail": "Verification failed.", "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Fetch order to get amount and currency
+        try:
+            order = client.order.fetch(order_id)
+            amount_decimal = Decimal(order["amount"]) / 100
+            currency = order.get("currency", "INR")
+        except Exception:
+            amount_decimal = Decimal("0")
+            currency = "INR"
+
+        payment = Payment.objects.create(
+            business=business,
+            razorpay_order_id=order_id,
+            razorpay_payment_id=payment_id,
+            razorpay_signature=signature,
+            amount=amount_decimal,
+            currency=currency,
+            payment_status="captured",
+            payment_method="razorpay",
+        )
+
+        subscription = None
+        if plan:
+            start = timezone.now().date()
+            end = start + timedelta(days=plan.duration)
+            subscription = Subscription.objects.create(
+                business=business,
+                plan=plan,
+                payment_id=payment_id,
+                subscription_start_date=start,
+                subscription_end_date=end,
+            )
+
+        return Response(
+            {
+                "payment": PaymentSerializer(payment).data,
+                "subscription": (
+                    {
+                        "id": subscription.id,
+                        "plan": plan.name,
+                        "subscription_start_date": subscription.subscription_start_date.isoformat(),
+                        "subscription_end_date": subscription.subscription_end_date.isoformat(),
+                    }
+                    if subscription
+                    else None
+                ),
+            },
+            status=status.HTTP_201_CREATED,
+        )

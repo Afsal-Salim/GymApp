@@ -14,8 +14,13 @@ from pathlib import Path
 import os
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env (optional; does nothing if file missing)
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -28,6 +33,9 @@ SECRET_KEY = 'django-insecure-z6c&i66hg&#1=4u%vf+!16sg6$7)s2ylke0a0-0p^s!6u++34!
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+# CORS: allow all origins (for frontend). Restrict in production.
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Application definition
@@ -47,11 +55,13 @@ INSTALLED_APPS = [
     'subscriptions',
     'assets',
     'payments',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -143,3 +153,9 @@ AUTH_REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.getenv("AUTH_REFRESH_TOKEN_D
 AUTH_PASSWORD_RESET_TOKEN_LIFETIME = timedelta(
     minutes=int(os.getenv("AUTH_PASSWORD_RESET_MINUTES", "60"))
 )
+
+# --- Razorpay (payments) ---
+# Load from .env; dummy values for local dev only (replace with real keys for payments)
+# Get keys from https://dashboard.razorpay.com/app/keys
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_dummy_key_id")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret_32_chars_long_xxxx")
