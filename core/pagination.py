@@ -1,14 +1,19 @@
 from math import ceil
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from django.http import HttpRequest
+
+from rest_framework.response import Response
 
 
 class Paginator:
     """
-    Simple reusable paginator that reads `page` and `page_size`
-    from query parameters and can be used across apps.
+    Reusable paginator: reads `page` and `page_size` from query params.
+    Use paginate() to get (items, meta), or paginated_response() for a DRF Response.
     """
+
+    default_page_size: int = 10
+    max_page_size: int = 100
 
     def __init__(
         self,
@@ -19,8 +24,8 @@ class Paginator:
     ) -> None:
         self.request = request
         self.queryset = queryset
-        self.default_page_size = default_page_size
-        self.max_page_size = max_page_size
+        self.default_page_size = default_page_size or self.default_page_size
+        self.max_page_size = max_page_size or self.max_page_size
 
     def _get_page_params(self) -> Tuple[int, int]:
         try:
@@ -55,4 +60,15 @@ class Paginator:
             "has_previous": page > 1,
         }
         return items, meta
+
+
+def paginated_response(request: HttpRequest, queryset, serializer_class, many: bool = True):
+    """
+    Common helper for list APIs: paginate queryset and return DRF Response with
+    { "results": [...], "meta": { page, page_size, total, total_pages, has_next, has_previous } }.
+    """
+    paginator = Paginator(request, queryset)
+    items, meta = paginator.paginate()
+    serializer = serializer_class(items, many=many)
+    return Response({"results": serializer.data, "meta": meta})
 

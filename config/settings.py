@@ -159,3 +159,33 @@ AUTH_PASSWORD_RESET_TOKEN_LIFETIME = timedelta(
 # Get keys from https://dashboard.razorpay.com/app/keys
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_dummy_key_id")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret_32_chars_long_xxxx")
+
+# --- Email (OTP / signup verification) ---
+# Load from .env. If not set, OTP emails will fail unless using console backend.
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@gymapp.local")
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() in ("1", "true", "yes")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+
+# --- OTP (signup verification) ---
+# Must be at least 1 so OTP doesn’t expire immediately
+OTP_EXPIRE_MINUTES = max(1, int(os.getenv("OTP_EXPIRE_MINUTES", "10")))
+OTP_EMAIL_SUBJECT = os.getenv("OTP_EMAIL_SUBJECT", "Your OTP Code")
+
+# --- Payment confirmation email ---
+PAYMENT_CONFIRMATION_EMAIL_SUBJECT = os.getenv(
+    "PAYMENT_CONFIRMATION_EMAIL_SUBJECT",
+    "Payment confirmed – GymApp",
+)
+
+# --- Password reset OTP email ---
+OTP_PASSWORD_RESET_EMAIL_SUBJECT = os.getenv(
+    "OTP_PASSWORD_RESET_EMAIL_SUBJECT",
+    "Your password reset code",
+)

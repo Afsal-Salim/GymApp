@@ -2,8 +2,10 @@ import hashlib
 import os
 import secrets
 import uuid
-from django.utils import timezone
+
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Customer(models.Model):
@@ -36,11 +38,32 @@ class Customer(models.Model):
 
 
 class EmailOTP(models.Model):
+    PURPOSE_SIGNUP = "signup"
+    PURPOSE_PASSWORD_RESET = "password_reset"
+    PURPOSE_CHOICES = [
+        (PURPOSE_SIGNUP, "Signup"),
+        (PURPOSE_PASSWORD_RESET, "Password reset"),
+    ]
+
     email = models.EmailField()
     otp = models.CharField(max_length=6)
     token = models.UUIDField(default=uuid.uuid4, editable=False)
+    purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_SIGNUP,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_verified = models.BooleanField(default=False)
 
     def is_expired(self):
-        return timezone.now() > self.created_at + timezone.timedelta(minutes=10)
+        minutes = max(1, getattr(settings, "OTP_EXPIRE_MINUTES", 10))
+        created = self.created_at
+        # Ensure we compare aware datetimes (SQLite can return naive in some setups)
+        if timezone.is_naive(created):
+            created = timezone.make_aware(created, timezone=timezone.utc)
+        expiry_at = created + timezone.timedelta(minutes=minutes)
+        now = timezone.now()
+        if timezone.is_naive(now):
+            now = timezone.make_aware(now, timezone=timezone.utc)
+        return now > expiry_at

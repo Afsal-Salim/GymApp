@@ -3,6 +3,8 @@ from datetime import timedelta
 
 import razorpay
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -23,6 +25,55 @@ def _get_razorpay_client():
     key_id = getattr(settings, "RAZORPAY_KEY_ID", "") or ""
     key_secret = getattr(settings, "RAZORPAY_KEY_SECRET", "") or ""
     return razorpay.Client(auth=(key_id, key_secret))
+
+
+def _mask_payment_id(payment_id):
+    """Show last 4 chars for privacy, e.g. pay_****xyz1."""
+    if not payment_id or len(payment_id) <= 4:
+        return payment_id or "—"
+    return payment_id[:4] + "****" + payment_id[-4:]
+
+
+def _send_payment_success_email(customer, business, payment, subscription, plan):
+    """Send styled HTML email with payment and (optional) subscription details."""
+    customer_name = customer.username or customer.email.split("@")[0]
+    amount = f"{payment.amount:.2f}"
+    payment_id_masked = _mask_payment_id(payment.razorpay_payment_id)
+    context = {
+        "customer_name": customer_name,
+        "business_name": business.name,
+        "amount": amount,
+        "currency": payment.currency,
+        "payment_id": payment_id_masked,
+        "payment_status": payment.payment_status or "captured",
+        "plan_name": plan.name if plan else None,
+        "subscription_start_date": subscription.subscription_start_date.isoformat() if subscription else None,
+        "subscription_end_date": subscription.subscription_end_date.isoformat() if subscription else None,
+    }
+    subject = getattr(
+        settings,
+        "PAYMENT_CONFIRMATION_EMAIL_SUBJECT",
+        f"Payment confirmed – {business.name}",
+    )
+    plain_message = (
+        f"Hi {customer_name}, your payment of {payment.currency} {amount} for {business.name} "
+        f"has been confirmed. Payment ID: {payment_id_masked}."
+    )
+    html_message = render_to_string(
+        "payments/email_payment_success.html",
+        context,
+    )
+    try:
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[customer.email],
+            fail_silently=True,
+            html_message=html_message,
+        )
+    except Exception:
+        pass  # fail_silently already; avoid breaking the API response
 
 
 class CreateOrderView(APIView):
@@ -184,6 +235,15 @@ class VerifyPaymentView(APIView):
                 subscription_start_date=start,
                 subscription_end_date=end,
             )
+
+        # Send payment confirmation email to the customer
+        _send_payment_success_email(
+            customer=customer,
+            business=business,
+            payment=payment,
+            subscription=subscription,
+            plan=plan,
+        )
 
         return Response(
             {
