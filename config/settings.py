@@ -189,3 +189,7 @@ OTP_PASSWORD_RESET_EMAIL_SUBJECT = os.getenv(
     "OTP_PASSWORD_RESET_EMAIL_SUBJECT",
     "Your password reset code",
 )
+
+# --- Google OAuth (sign in with Google) ---
+# Client ID from Google Cloud Console (Web application). Used to verify ID tokens.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")

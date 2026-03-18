@@ -9,9 +9,22 @@ from django.utils import timezone
 
 
 class Customer(models.Model):
+    AUTH_PROVIDER_EMAIL = "email"
+    AUTH_PROVIDER_GOOGLE = "google"
+    AUTH_PROVIDER_CHOICES = [
+        (AUTH_PROVIDER_EMAIL, "Email"),
+        (AUTH_PROVIDER_GOOGLE, "Google"),
+    ]
+
     username = models.CharField(max_length=150, default="", unique=True)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
+    auth_provider = models.CharField(
+        max_length=20,
+        choices=AUTH_PROVIDER_CHOICES,
+        default=AUTH_PROVIDER_EMAIL,
+    )
+    google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

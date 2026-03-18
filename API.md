@@ -80,6 +80,41 @@ Authorization: Bearer <access_token>
 }
 ```
 
+---
+
+### 1.3 Sign in with Google
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/auth/google/` |
+| **Auth** | None |
+
+Sign in or sign up using a Google ID token (from your frontend’s Google Sign-In). Same response shape as login/signup.
+
+**Body:**
+```json
+{
+  "id_token": "<Google ID token from frontend>"
+}
+```
+
+**Success (200 or 201):**
+```json
+{
+  "customer": { "id": 1, "email": "user@gmail.com", "username": "user", "created_at": "...", "updated_at": "..." },
+  "access": "<access_token>",
+  "refresh": "<refresh_token>"
+}
+```
+
+**Errors:**
+- `400` – Missing or invalid `id_token`, or token missing email.
+- `409` – An account already exists with this email (created with password). Ask user to sign in with password.
+- `503` – `GOOGLE_OAUTH_CLIENT_ID` not set (Google sign-in not configured).
+
+Requires `GOOGLE_OAUTH_CLIENT_ID` in env (Web application client ID from Google Cloud Console).
+
 **Error (400):** `{"detail": "Invalid credentials"}`
 
 ---
