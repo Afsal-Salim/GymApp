@@ -313,6 +313,144 @@ If `plan_id` was not sent, `subscription` is `null`.
 
 ---
 
+## Businesses
+
+### Get business details by slug (public)
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/businesses/public/<slug>/` |
+| **Auth** | None |
+
+Returns basic profile fields for a gym/business. Does **not** include owner email, username, or subscription/payment data. Use `/api/businesses/<slug>/active-subscription/` if you need subscription status.
+
+**Example:** `GET /api/businesses/public/my-gym/`
+
+**Success (200):**
+```json
+{
+  "id": 1,
+  "name": "My Gym",
+  "slug": "my-gym",
+  "description": "…",
+  "phone": "+91…",
+  "address": "…",
+  "created_at": "2026-03-16T10:00:00Z",
+  "updated_at": "2026-03-16T10:00:00Z"
+}
+```
+
+**Not found (404):**
+```json
+{
+  "detail": "No business found for this slug.",
+  "slug": "unknown-slug"
+}
+```
+
+### Get business by slug (owner only)
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/businesses/<slug>/` |
+| **Auth** | Bearer access token (must own the business) |
+
+Returns full details including `owner`, `owner_email`, `owner_username`, and `subscriptions`.
+
+---
+
+### Crystal leads (public POST)
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/businesses/public/<slug>/crystal-leads/` |
+| **Auth** | None |
+
+**Example:** `POST /api/businesses/public/power-gym/crystal-leads/`  
+`Content-Type: application/json`
+
+Each successful request creates one row with server `created_at`. The full JSON body is stored in `payload`; `lead_type` is indexed. For **WhatsApp**, `click_count` is copied into `quantity` (capped 1–1000) so analytics can `SUM(quantity)` (one POST can represent multiple clicks if you ever batch).
+
+**`lead_type` values:** `join_now` | `book_free_trial` | `plan_visit` | `whatsapp_click`
+
+If `business_slug` is sent, it must match the URL `<slug>`.
+
+**1) Join now**
+```json
+{
+  "lead_type": "join_now",
+  "business_slug": "power-gym",
+  "submitted_at_ms": 1710000000000,
+  "name": "Jane Doe",
+  "phone": "+971501234567",
+  "focus": "strength",
+  "frequency": "3-4"
+}
+```
+`focus`: `strength` \| `weight_loss` \| `general` \| `classes` \| `explore`  
+`frequency`: `1-2` \| `3-4` \| `5+` \| `unsure`
+
+**2) Book free trial**
+```json
+{
+  "lead_type": "book_free_trial",
+  "business_slug": "power-gym",
+  "submitted_at_ms": 1710000000000,
+  "name": "Jane Doe",
+  "phone": "+971501234567",
+  "visit_when": "2025-03-24 at 14:30",
+  "interests": ["strength", "cardio", "classes"],
+  "notes": "Prefer evenings"
+}
+```
+
+**3) Plan your visit**
+```json
+{
+  "lead_type": "plan_visit",
+  "business_slug": "power-gym",
+  "submitted_at_ms": 1710000000000,
+  "name": "Jane Doe",
+  "phone": "+971501234567",
+  "preferred_when": "2025-03-25 (time flexible)",
+  "notes": ""
+}
+```
+
+**4) WhatsApp click**
+```json
+{
+  "lead_type": "whatsapp_click",
+  "business_slug": "power-gym",
+  "submitted_at_ms": 1710000000000,
+  "source": "fab",
+  "click_count": 1
+}
+```
+
+**Success (201):** `{"ok": true}`  
+**404:** unknown slug  
+**400:** invalid `lead_type` or `business_slug` mismatch
+
+**WhatsApp analytics (recommended approach):** Store **one row per POST** (or per batch with `quantity` = `click_count`). Aggregate with `SUM(quantity)` grouped by `TruncDate` / `TruncWeek` / `TruncMonth` on `created_at`. Avoid only a single running counter on `Business`—you lose time series and cannot do day/week/month/90d charts without extra tables.
+
+---
+
+### Crystal leads analytics (owner)
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/businesses/<slug>/crystal-leads/analytics/` |
+| **Auth** | Bearer access token (must own the business) |
+
+Returns WhatsApp click totals (`today`, `last_7_days`, `last_30_days`, `last_90_days`) and series for the last 90 days **by day, week, and month** (`SUM(quantity)` per bucket). Also returns `all_leads`: event counts and units per `lead_type`.
+
+---
+
 ## Quick test (curl)
 
 **Login and get token:**
@@ -325,6 +463,18 @@ curl -X POST http://localhost:8000/api/auth/login/ \
 **List plans:**
 ```bash
 curl http://localhost:8000/api/plans/plan_list/
+```
+
+**Public business by slug:**
+```bash
+curl http://localhost:8000/api/businesses/public/my-gym/
+```
+
+**Crystal lead (WhatsApp click):**
+```bash
+curl -X POST http://localhost:8000/api/businesses/public/my-gym/crystal-leads/ \
+  -H "Content-Type: application/json" \
+  -d '{"lead_type":"whatsapp_click","business_slug":"my-gym","submitted_at_ms":1710000000000,"source":"fab","click_count":1}'
 ```
 
 **Create payment order (no login; email must own the business for this slug):**

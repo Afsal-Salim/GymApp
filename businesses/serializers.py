@@ -54,6 +54,26 @@ class BusinessSerializer(serializers.ModelSerializer):
         return obj.owner.username if obj.owner_id else None
 
 
+class BusinessPublicSerializer(serializers.ModelSerializer):
+    """
+    Public business profile (no owner identifiers). For gym pages / shareable links by slug.
+    """
+
+    class Meta:
+        model = Business
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "phone",
+            "address",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
 class BusinessCreateSerializer(serializers.ModelSerializer):
     """For creating a business; owner is set in the view."""
 

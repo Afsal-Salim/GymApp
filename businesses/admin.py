@@ -1,3 +1,17 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Business, CrystalLead
+
+
+@admin.register(Business)
+class BusinessAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "owner", "created_at")
+    search_fields = ("name", "slug", "owner__email")
+
+
+@admin.register(CrystalLead)
+class CrystalLeadAdmin(admin.ModelAdmin):
+    list_display = ("id", "business", "lead_type", "quantity", "created_at")
+    list_filter = ("lead_type", "created_at")
+    search_fields = ("business__slug",)
+    readonly_fields = ("created_at",)
