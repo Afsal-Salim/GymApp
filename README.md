@@ -29,24 +29,11 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-### Auth API
+### Documentation
 
-Base path: `/api/auth/`
+- **[API.md](API.md)** — full API reference (paths, methods, auth, bodies, responses).
+- **[DB.md](DB.md)** — database schema, tables, and relationships.
 
-- **Signup**: `POST /api/auth/signup/`
-  - Body: `{"username": "...", "email": "...", "password": "..." }`
-  - Response: user info + `access` and `refresh` tokens.
-
-- **Login**: `POST /api/auth/login/`
-  - Body: `{"username": "...", "password": "..." }`
-  - Response: user info + `access` and `refresh` tokens.
-
-- **Forgot password**: `POST /api/auth/forgot-password/`
-  - Body: `{"email": "..." }`
-  - Response: generic message; no email is actually sent yet.
-
-- **Refresh access token**: `POST /api/auth/refresh/`
-  - Body: `{"refresh": "<refresh_token>" }`
-  - Response: new `access` token if refresh token is valid.
+Copy **`.env.example`** to **`.env`** and set secrets (see file comments). Never commit `.env`.
 
 

@@ -5,6 +5,11 @@ from . import views
 urlpatterns = [
     path("", views.BusinessListCreateView.as_view(), name="business-list-create"),
     path(
+        "website-setup/",
+        views.CrystalWebsiteSetupView.as_view(),
+        name="business-website-setup",
+    ),
+    path(
         "public/<slug:slug>/crystal-leads/",
         views.CrystalLeadCreateView.as_view(),
         name="business-crystal-leads-create",

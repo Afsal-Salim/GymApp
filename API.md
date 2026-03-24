@@ -1,388 +1,195 @@
 # GymApp API Reference
 
-**Base URL:** `http://localhost:8000` (or your server)
+HTTP interfaces for the Django GymApp backend.  
+**Example base URL:** `http://127.0.0.1:8000`
 
-**Content-Type:** `application/json` for all request bodies.
+## Conventions
 
----
-
-## Authentication
-
-Auth endpoints (login, signup, refresh) return tokens. **Payment endpoints (create-order, verify) do not require login**; they use the request body (`email` + `business_slug`) and only allow the business owner’s email for that slug.
-
-For other protected endpoints (if any), use **Bearer token**:
-
-```
-Authorization: Bearer <access_token>
-```
+- JSON bodies: `Content-Type: application/json`
+- Protected routes: `Authorization: Bearer <access_token>`
+- List endpoints use query params `page` (default 1) and `page_size` (default 10, max 100); response shape: `{ "results": [...], "meta": { "page", "page_size", "total", "total_pages", "has_next", "has_previous" } }`
 
 ---
 
-## 1. Auth
+## 1. Non-API pages (HTML)
 
-### 1.1 Signup
-
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/signup/` |
-| **Auth** | None |
-
-**Body:**
-```json
-{
-  "email": "user@example.com",
-  "password": "YourPass123",
-  "username": "optional_username"
-}
-```
-- `email` (required), `password` (required, 8–30 chars, at least one uppercase and one number), `username` (optional; defaults to email)
-
-**Success (201):**
-```json
-{
-  "customer": {
-    "id": 1,
-    "email": "user@example.com",
-    "username": "user@example.com",
-    "created_at": "2026-03-16T10:00:00Z",
-    "updated_at": "2026-03-16T10:00:00Z"
-  },
-  "access": "<access_token>",
-  "refresh": "<refresh_token>"
-}
-```
+| Method | Path |
+|--------|------|
+| GET | `/admin/` |
+| GET | `/login/` |
+| GET | `/signup/` |
 
 ---
 
-### 1.2 Login
+## 2. Authentication: `/api/auth/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/login/` |
-| **Auth** | None |
+### POST `/api/auth/send-otp/`
 
-**Body:**
-```json
-{
-  "email": "test@example.com",
-  "password": "password123"
-}
-```
+- **Auth:** none  
+- **Body:** `{ "email": "..." }`  
+- **200:** `{ "message": "OTP sent to email", "token": "<uuid>" }`  
+- **400:** missing email  
 
-**Success (200):**
-```json
-{
-  "customer": { "id": 1, "email": "test@example.com", "username": "testuser", "created_at": "...", "updated_at": "..." },
-  "access": "<access_token>",
-  "refresh": "<refresh_token>"
-}
-```
+### POST `/api/auth/verify-otp/`
 
----
+- **Auth:** none  
+- **Body:** `{ "token": "<uuid>", "otp": "123456", "email": "..." }` (email optional but recommended)  
+- **200:** `{ "message": "Email verified" }`  
+- **400:** invalid/expired token or OTP  
 
-### 1.3 Sign in with Google
+### POST `/api/auth/signup/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/google/` |
-| **Auth** | None |
+- **Auth:** none  
+- **Body:** `email`, `password` (8-30 chars, 1 uppercase, 1 number), optional `username` (defaults to email), `token` from send-otp flow after verify  
+- **201:** `{ "customer": {...}, "access": "...", "refresh": "..." }`  
+- **400:** validation / email not verified  
 
-Sign in or sign up using a Google ID token (from your frontend’s Google Sign-In). Same response shape as login/signup.
+### POST `/api/auth/login/`
 
-**Body:**
-```json
-{
-  "id_token": "<Google ID token from frontend>"
-}
-```
+- **Auth:** none  
+- **Body:** `{ "email", "password" }`  
+- **200:** same shape as signup  
+- **400:** `{ "detail": "Invalid credentials" }`  
 
-**Success (200 or 201):**
-```json
-{
-  "customer": { "id": 1, "email": "user@gmail.com", "username": "user", "created_at": "...", "updated_at": "..." },
-  "access": "<access_token>",
-  "refresh": "<refresh_token>"
-}
-```
+### POST `/api/auth/google/`
 
-**Errors:**
-- `400` – Missing or invalid `id_token`, or token missing email.
-- `409` – An account already exists with this email (created with password). Ask user to sign in with password.
-- `503` – `GOOGLE_OAUTH_CLIENT_ID` not set (Google sign-in not configured).
+- **Auth:** none  
+- **Body:** `{ "id_token": "<Google JWT>" }`  
+- **200/201:** same token shape as login  
+- **409:** email exists with password provider  
+- **503:** Google not configured or `google-auth` missing  
 
-Requires `GOOGLE_OAUTH_CLIENT_ID` in env (Web application client ID from Google Cloud Console).
+### POST `/api/auth/forgot-password/`
 
-**Error (400):** `{"detail": "Invalid credentials"}`
+- **Body:** `{ "email" }`  
+- **200:** generic message; includes `token` and `expires_in_minutes` when account exists  
+
+### POST `/api/auth/verify-reset-otp/`
+
+- **Body:** `email`, `token`, `otp`  
+- **200:** message + token  
+
+### POST `/api/auth/reset-password/`
+
+- **Body:** `email`, `token`, `new_password` (same rules as signup)  
+- **200:** success message  
+
+### POST `/api/auth/refresh/`
+
+- **Body:** `{ "refresh": "<token>" }`  
+- **200:** `{ "access": "..." }`  
 
 ---
 
-### 1.3 Refresh token
+## 3. Businesses: `/api/businesses/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/refresh/` |
-| **Auth** | None |
+### GET `/api/businesses/`
 
-**Body:**
-```json
-{
-  "refresh": "<refresh_token>"
-}
-```
+- **Auth:** Bearer  
+- **200:** paginated list of owned businesses; each item includes `website_theme`, `website_content`, `subscriptions`, owner fields  
 
-**Success (200):**
-```json
-{
-  "access": "<new_access_token>"
-}
-```
+### POST `/api/businesses/`
 
----
+- **Auth:** Bearer  
+- **Body:** `name`, `slug` (unique), optional `description`, `phone`, `address`  
+- **201:** created business  
 
-### 1.4 Forgot password
+### POST `/api/businesses/website-setup/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/auth/forgot-password/` |
-| **Auth** | None |
+- **Auth:** Bearer
+- **Body:** `slug` (unique), `theme` (object), `content` (object) — Crystal builder payload
+- **201:** business with:
+  - `name` / `description` from `content.header` / `content.description` when present
+  - `phone`, `address`, `location_map_url` from `content.contacts`: `locationMapUrl` (or `location_map_url`), and `items[]` with `id` `"phone"` / `"address"` (`value` or `tel:` `href` for phone)
+- Full `content` (including all `contacts` fields) remains in `website_content`
 
-**Body:**
-```json
-{
-  "email": "user@example.com"
-}
-```
+### GET `/api/businesses/public/<slug>/`
 
-**Success (200):**
-```json
-{
-  "detail": "If that account exists, we've emailed you.",
-  "reset_url": "/reset-password/?token=...",
-  "expires_in_minutes": 60
-}
-```
+- **Auth:** none
+- **200:** public profile including `phone`, `address`, `location_map_url`, `website_theme`, `website_content`
+- **404:** unknown slug  
 
----
+### POST `/api/businesses/public/<slug>/crystal-leads/`
 
-## 2. Plans
+- **Auth:** none  
+- **Body:** `lead_type` required: `join_now` | `book_free_trial` | `plan_visit` | `whatsapp_click`; optional `business_slug` (must match URL); other fields stored in payload  
+- **201:** `{ "ok": true }`  
+- Owner email sent for `join_now` and `book_free_trial` when configured  
 
-### 2.1 List plans
+### GET `/api/businesses/<slug>/`
 
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/plans/plan_list/` |
-| **Auth** | None |
+- **Auth:** Bearer (must own business)  
+- **200:** full business + subscriptions  
+- **404:** not found or not owner  
 
-**Body:** None
+### GET `/api/businesses/<slug>/active-subscription/`
 
-**Success (200):**
-```json
-[
-  {
-    "id": 1,
-    "name": "Starter",
-    "price": "499.00",
-    "currency": "INR",
-    "duration": 28,
-    "features": [
-      { "id": 1, "name": "WhatsApp chat" },
-      { "id": 2, "name": "Online payments" }
-    ],
-    "created_at": "..."
-  },
-  {
-    "id": 2,
-    "name": "Pro",
-    "price": "999.00",
-    "currency": "INR",
-    "duration": 28,
-    "features": [ ... ],
-    "created_at": "..."
-  }
-]
-```
+- **Auth:** none  
+- **200:** `slug`, `has_active_subscription`, `subscription` object or null  
+
+### GET `/api/businesses/<slug>/crystal-leads/analytics/`
+
+- **Auth:** Bearer (owner)  
+- **200:** `whatsapp` totals and time series, `all_leads` counts by type  
 
 ---
 
-## 3. Payments
+## 4. Plans: `/api/plans/`
 
-### 3.1 Create order (Razorpay)
+### GET `/api/plans/plan_list/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/payments/create-order/` |
-| **Auth** | None (email + slug must match: only the business owner’s email can create orders for that slug) |
-
-**Body (frontend sends plan_id, email, slug):**
-```json
-{
-  "email": "test@example.com",
-  "business_slug": "my-gym",
-  "plan_id": 1
-}
-```
-**Or** custom amount instead of plan:
-```json
-{
-  "email": "test@example.com",
-  "business_slug": "my-gym",
-  "amount": "999.00",
-  "currency": "INR"
-}
-```
-- `email` (required) – must match the authenticated user’s email.
-- `business_slug` (required) – slug of the business (e.g. from URL).
-- `plan_id` (optional) – use plan price; do not send `amount` if you send `plan_id`.
-- `amount` (optional) – custom amount in rupees (string or number).
-- `currency` (optional) – default `"INR"`.
-
-**Success (201):**
-```json
-{
-  "order_id": "order_xxxx",
-  "amount": 49900,
-  "currency": "INR",
-  "key_id": "rzp_test_xxxx"
-}
-```
-Use these in the frontend to open Razorpay Checkout. After payment, call **Verify payment** with the same `business_slug` and the IDs returned by Razorpay.
-
-**Errors:**
-- 403: `{"detail": "No account found for this email."}` or `{"detail": "This business is not linked to this email."}`
-- 400: Validation (e.g. `{"business_slug": "No business found for this slug."}`)
+- **Auth:** none  
+- **200:** paginated plans with nested `features`  
 
 ---
 
-### 3.2 Verify payment
+## 5. Payments: `/api/payments/`
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/payments/verify/` |
-| **Auth** | None (email + slug must match business owner) |
+Requires Razorpay env vars; otherwise `503` where applicable.
 
-**Body (frontend sends plan_id, email, slug + Razorpay IDs):**
-```json
-{
-  "razorpay_order_id": "order_xxxx",
-  "razorpay_payment_id": "pay_xxxx",
-  "razorpay_signature": "xxxx",
-  "email": "test@example.com",
-  "business_slug": "my-gym",
-  "plan_id": 1
-}
-```
-- `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature` – from Razorpay after successful payment.
-- `email` (required) – business owner’s email for the given slug.
-- `business_slug` (required) – same as in create-order.
-- `plan_id` (optional) – if provided, a **Subscription** is created for this plan.
+### POST `/api/payments/create-order/`
 
-**Success (201):**
-```json
-{
-  "payment": {
-    "id": 1,
-    "business": 1,
-    "razorpay_order_id": "order_xxxx",
-    "razorpay_payment_id": "pay_xxxx",
-    "amount": "499.00",
-    "currency": "INR",
-    "payment_status": "captured",
-    "payment_method": "razorpay",
-    "created_at": "..."
-  },
-  "subscription": {
-    "id": 1,
-    "plan": "Starter",
-    "subscription_start_date": "2026-03-16",
-    "subscription_end_date": "2026-04-13"
-  }
-}
-```
-If `plan_id` was not sent, `subscription` is `null`.
+- **Auth:** none (email must own `business_slug`)  
+- **Body:** `email`, `business_slug`, and either `plan_id` OR `amount` (not both); optional `currency` (default INR)  
+- **201:** `order_id`, `amount` (paise), `currency`, `key_id`  
+- **403:** email not owner  
 
-**Errors:**
-- 400: `{"detail": "Payment signature verification failed."}` or validation errors.
+### POST `/api/payments/verify/`
+
+- **Auth:** none  
+- **Body:** `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`, `email`, `business_slug`, optional `plan_id`  
+- **201:** `payment` record; optional `subscription` if `plan_id` set  
+- **400:** bad signature  
 
 ---
 
-## Businesses
+## Quick path index
 
-### Get business details by slug (public)
-
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/businesses/public/<slug>/` |
-| **Auth** | None |
-
-Returns basic profile fields for a gym/business. Does **not** include owner email, username, or subscription/payment data. Use `/api/businesses/<slug>/active-subscription/` if you need subscription status.
-
-**Example:** `GET /api/businesses/public/my-gym/`
-
-**Success (200):**
-```json
-{
-  "id": 1,
-  "name": "My Gym",
-  "slug": "my-gym",
-  "description": "…",
-  "phone": "+91…",
-  "address": "…",
-  "created_at": "2026-03-16T10:00:00Z",
-  "updated_at": "2026-03-16T10:00:00Z"
-}
+```
+GET  /login/  /signup/  /admin/
+POST /api/auth/send-otp/  verify-otp/  signup/  login/  google/
+     forgot-password/  verify-reset-otp/  reset-password/  refresh/
+GET|POST /api/businesses/
+POST /api/businesses/website-setup/
+GET  /api/businesses/public/<slug>/
+POST /api/businesses/public/<slug>/crystal-leads/
+GET  /api/businesses/<slug>/  <slug>/active-subscription/  <slug>/crystal-leads/analytics/
+GET  /api/plans/plan_list/
+POST /api/payments/create-order/  verify/
 ```
 
-**Not found (404):**
-```json
-{
-  "detail": "No business found for this slug.",
-  "slug": "unknown-slug"
-}
-```
-
-### Get business by slug (owner only)
-
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/businesses/<slug>/` |
-| **Auth** | Bearer access token (must own the business) |
-
-Returns full details including `owner`, `owner_email`, `owner_username`, and `subscriptions`.
+See `DB.md` for database schema. Configure secrets via `.env` (see `.env.example`).
 
 ---
 
-### Crystal leads (public POST)
+## Appendix: example payloads
 
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `/api/businesses/public/<slug>/crystal-leads/` |
-| **Auth** | None |
+### Crystal lead: join now
 
-**Example:** `POST /api/businesses/public/power-gym/crystal-leads/`  
-`Content-Type: application/json`
-
-Each successful request creates one row with server `created_at`. The full JSON body is stored in `payload`; `lead_type` is indexed. For **WhatsApp**, `click_count` is copied into `quantity` (capped 1–1000) so analytics can `SUM(quantity)` (one POST can represent multiple clicks if you ever batch).
-
-**`lead_type` values:** `join_now` | `book_free_trial` | `plan_visit` | `whatsapp_click`
-
-If `business_slug` is sent, it must match the URL `<slug>`.
-
-**1) Join now**
 ```json
 {
   "lead_type": "join_now",
-  "business_slug": "power-gym",
+  "business_slug": "my-gym",
   "submitted_at_ms": 1710000000000,
   "name": "Jane Doe",
   "phone": "+971501234567",
@@ -390,120 +197,82 @@ If `business_slug` is sent, it must match the URL `<slug>`.
   "frequency": "3-4"
 }
 ```
-`focus`: `strength` \| `weight_loss` \| `general` \| `classes` \| `explore`  
-`frequency`: `1-2` \| `3-4` \| `5+` \| `unsure`
 
-**2) Book free trial**
+### Crystal lead: book free trial
+
 ```json
 {
   "lead_type": "book_free_trial",
-  "business_slug": "power-gym",
+  "business_slug": "my-gym",
   "submitted_at_ms": 1710000000000,
   "name": "Jane Doe",
   "phone": "+971501234567",
   "visit_when": "2025-03-24 at 14:30",
-  "interests": ["strength", "cardio", "classes"],
-  "notes": "Prefer evenings"
+  "interests": ["strength", "cardio"],
+  "notes": "Evenings preferred"
 }
 ```
 
-**3) Plan your visit**
-```json
-{
-  "lead_type": "plan_visit",
-  "business_slug": "power-gym",
-  "submitted_at_ms": 1710000000000,
-  "name": "Jane Doe",
-  "phone": "+971501234567",
-  "preferred_when": "2025-03-25 (time flexible)",
-  "notes": ""
-}
-```
+### Crystal lead: WhatsApp click
 
-**4) WhatsApp click**
 ```json
 {
   "lead_type": "whatsapp_click",
-  "business_slug": "power-gym",
+  "business_slug": "my-gym",
   "submitted_at_ms": 1710000000000,
   "source": "fab",
   "click_count": 1
 }
 ```
 
-**Success (201):** `{"ok": true}`  
-**404:** unknown slug  
-**400:** invalid `lead_type` or `business_slug` mismatch
+### Website setup (abbreviated, with contacts + map)
 
-**WhatsApp analytics (recommended approach):** Store **one row per POST** (or per batch with `quantity` = `click_count`). Aggregate with `SUM(quantity)` grouped by `TruncDate` / `TruncWeek` / `TruncMonth` on `created_at`. Avoid only a single running counter on `Business`—you lose time series and cannot do day/week/month/90d charts without extra tables.
-
----
-
-### Crystal leads analytics (owner)
-
-| | |
-|---|---|
-| **Method** | `GET` |
-| **URL** | `/api/businesses/<slug>/crystal-leads/analytics/` |
-| **Auth** | Bearer access token (must own the business) |
-
-Returns WhatsApp click totals (`today`, `last_7_days`, `last_30_days`, `last_90_days`) and series for the last 90 days **by day, week, and month** (`SUM(quantity)` per bucket). Also returns `all_leads`: event counts and units per `lead_type`.
-
----
-
-## Quick test (curl)
-
-**Login and get token:**
-```bash
-curl -X POST http://localhost:8000/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+```json
+{
+  "slug": "my-gym",
+  "theme": {
+    "accentHex": "#ea580c",
+    "darkHex": "#0c0a09",
+    "textHex": "#1c1917"
+  },
+  "content": {
+    "header": { "title": "My Gym", "taglineItems": [], "memberRating": 4.9 },
+    "nav": { "items": [], "ctaLabel": "Join now", "ctaHref": "#contact" },
+    "layout": { "heroBackgroundImage": "https://...", "heroOverlay": 0.55 },
+    "contacts": {
+      "sectionTitle": "Contact",
+      "whatsappFabHint": "…",
+      "locationMapUrl": "https://maps.app.goo.gl/xxxxxxxx",
+      "items": [
+        { "id": "email", "label": "Email", "value": "hello@gym.com", "href": "mailto:hello@gym.com" },
+        { "id": "phone", "label": "Phone", "value": "+91 …", "href": "tel:+91…" },
+        { "id": "address", "label": "Address", "value": "12 Wellness Road" }
+      ]
+    }
+  }
+}
 ```
 
-**List plans:**
-```bash
-curl http://localhost:8000/api/plans/plan_list/
+### Create Razorpay order
+
+```json
+{
+  "email": "owner@example.com",
+  "business_slug": "my-gym",
+  "plan_id": 1,
+  "currency": "INR"
+}
 ```
 
-**Public business by slug:**
-```bash
-curl http://localhost:8000/api/businesses/public/my-gym/
+### Verify payment
+
+```json
+{
+  "razorpay_order_id": "order_xxx",
+  "razorpay_payment_id": "pay_xxx",
+  "razorpay_signature": "xxx",
+  "email": "owner@example.com",
+  "business_slug": "my-gym",
+  "plan_id": 1
+}
 ```
-
-**Crystal lead (WhatsApp click):**
-```bash
-curl -X POST http://localhost:8000/api/businesses/public/my-gym/crystal-leads/ \
-  -H "Content-Type: application/json" \
-  -d '{"lead_type":"whatsapp_click","business_slug":"my-gym","submitted_at_ms":1710000000000,"source":"fab","click_count":1}'
-```
-
-**Create payment order (no login; email must own the business for this slug):**
-```bash
-curl -X POST http://localhost:8000/api/payments/create-order/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","business_slug":"my-gym","plan_id":1}'
-```
-
-**Verify payment (after user pays in Razorpay):**
-```bash
-curl -X POST http://localhost:8000/api/payments/verify/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "razorpay_order_id":"order_xxx",
-    "razorpay_payment_id":"pay_xxx",
-    "razorpay_signature":"xxx",
-    "email":"test@example.com",
-    "business_slug":"my-gym",
-    "plan_id":1
-  }'
-```
-
----
-
-## Dummy test data
-
-After running `python manage.py seed_dummy_data`:
-
-- **Login:** `test@example.com` / `password123`
-- **Business slugs:** `my-gym`, `fit-life`, `crossfit-zone` (first two owned by test@example.com)
-- **Plans:** `plan_id` 1 = Starter (₹499), 2 = Pro (₹999)
