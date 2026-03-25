@@ -37,6 +37,10 @@ class SignupView(APIView):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
         username = serializer.validated_data["username"]
+        user_content_policy_accepted = (
+            serializer.validated_data["user_content_policy_accepted"] == 1
+        )
+        privacy_policy_accepted = serializer.validated_data["privacy_policy_accepted"] == 1
         token = request.data.get("token")
 
         try:
@@ -67,7 +71,12 @@ class SignupView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        customer = Customer(email=email, username=username)
+        customer = Customer(
+            email=email,
+            username=username,
+            user_content_policy_accepted=user_content_policy_accepted,
+            privacy_policy_accepted=privacy_policy_accepted,
+        )
         customer.set_password(password)
         customer.save()
 

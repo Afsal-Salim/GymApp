@@ -25,6 +25,8 @@ class Customer(models.Model):
         default=AUTH_PROVIDER_EMAIL,
     )
     google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    user_content_policy_accepted = models.BooleanField(default=False)
+    privacy_policy_accepted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

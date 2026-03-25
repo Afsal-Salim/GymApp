@@ -15,6 +15,20 @@ from authentication.tokens import create_access_token, create_refresh_token
 
 class GoogleSignInView(APIView):
     """
+
+    @staticmethod
+    def _consent_validation_error():
+        return {
+            "error": "You must accept terms and privacy policy to create an account.",
+            "fields": {
+                "user_content_policy_accepted": "Expected 1",
+                "privacy_policy_accepted": "Expected 1",
+            },
+        }
+
+    @staticmethod
+    def _is_accepted(value) -> bool:
+        return str(value).strip() == "1"
     POST /api/auth/google/
 
     Sign in or sign up with Google.
@@ -113,8 +127,20 @@ class GoogleSignInView(APIView):
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
+            consent_terms = request.data.get("user_content_policy_accepted")
+            consent_privacy = request.data.get("privacy_policy_accepted")
+            if not existing.user_content_policy_accepted and self._is_accepted(consent_terms):
+                existing.user_content_policy_accepted = True
+            if not existing.privacy_policy_accepted and self._is_accepted(consent_privacy):
+                existing.privacy_policy_accepted = True
             existing.google_id = google_sub
-            existing.save(update_fields=["google_id"])
+            existing.save(
+                update_fields=[
+                    "google_id",
+                    "user_content_policy_accepted",
+                    "privacy_policy_accepted",
+                ]
+            )
             access = create_access_token(existing)
             refresh = create_refresh_token(existing)
             return Response(
@@ -132,12 +158,22 @@ class GoogleSignInView(APIView):
             suffix += 1
             username = f"{base_username}{suffix}"
 
+        consent_terms = request.data.get("user_content_policy_accepted")
+        consent_privacy = request.data.get("privacy_policy_accepted")
+        if not self._is_accepted(consent_terms) or not self._is_accepted(consent_privacy):
+            return Response(
+                self._consent_validation_error(),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         customer = Customer(
             email=email,
             username=username,
             password=secrets.token_hex(32),
             auth_provider=Customer.AUTH_PROVIDER_GOOGLE,
             google_id=google_sub,
+            user_content_policy_accepted=True,
+            privacy_policy_accepted=True,
         )
         customer.save()
 
