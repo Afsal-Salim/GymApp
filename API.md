@@ -91,7 +91,7 @@ HTTP interfaces for the Django GymApp backend.
 ### POST `/api/businesses/`
 
 - **Auth:** Bearer  
-- **Body:** `name`, `slug` (unique), optional `description`, `phone`, `address`  
+- **Body:** `name`, `slug` (unique), optional `description`, `phone`, `address`, `location_map_url`  
 - **201:** created business  
 
 ### POST `/api/businesses/website-setup/`
@@ -121,6 +121,20 @@ HTTP interfaces for the Django GymApp backend.
 - **Auth:** Bearer (must own business)  
 - **200:** full business + subscriptions  
 - **404:** not found or not owner  
+
+### PATCH `/api/businesses/<slug>/`
+
+- **Auth:** Bearer (must own the business identified by `slug` in the URL)
+- **Body:** any subset of editable fields (JSON merge — omitted keys are unchanged):
+  - `name` (string)
+  - `slug` (string, unique; changing slug updates the canonical URL for this business)
+  - `description`, `phone`, `address` (strings; `description` / `address` may be long text)
+  - `location_map_url` (string URL, max length per model)
+  - `website_theme`, `website_content` (JSON objects)
+- **200:** full business object (same shape as GET), including `subscriptions`
+- **400:** validation errors (e.g. duplicate `slug`, invalid JSON shape for theme/content)
+- **401:** missing/invalid Bearer token
+- **404:** no business with that slug, or not the owner
 
 ### GET `/api/businesses/<slug>/active-subscription/`
 
@@ -173,7 +187,8 @@ GET|POST /api/businesses/
 POST /api/businesses/website-setup/
 GET  /api/businesses/public/<slug>/
 POST /api/businesses/public/<slug>/crystal-leads/
-GET  /api/businesses/<slug>/  <slug>/active-subscription/  <slug>/crystal-leads/analytics/
+GET|PATCH /api/businesses/<slug>/
+GET  /api/businesses/<slug>/active-subscription/  <slug>/crystal-leads/analytics/
 GET  /api/plans/plan_list/
 POST /api/payments/create-order/  verify/
 ```
@@ -250,6 +265,16 @@ See `DB.md` for database schema. Configure secrets via `.env` (see `.env.example
       ]
     }
   }
+}
+```
+
+### Patch business (partial)
+
+```json
+{
+  "name": "Power Gym Downtown",
+  "phone": "+971501234567",
+  "location_map_url": "https://maps.app.goo.gl/example"
 }
 ```
 

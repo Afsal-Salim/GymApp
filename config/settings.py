@@ -77,6 +77,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.RequestLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -111,16 +112,21 @@ if _db_backend in ("postgres", "postgresql"):
         raise ImproperlyConfigured(
             "POSTGRES_USER and POSTGRES_DB are required when DJANGO_DATABASE_BACKEND=postgresql."
         )
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": _pg_db,
-            "USER": _pg_user,
-            "PASSWORD": _pg_password,
-            "HOST": os.getenv("POSTGRES_HOST", "localhost").strip() or "localhost",
-            "PORT": os.getenv("POSTGRES_PORT", "5432").strip() or "5432",
-        }
+    _pg_options = {}
+    _sslmode = (os.getenv("POSTGRES_SSLMODE") or "").strip().lower()
+    if _sslmode in ("disable", "allow", "prefer", "require", "verify-ca", "verify-full"):
+        _pg_options["sslmode"] = _sslmode
+    _default_db = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": _pg_db,
+        "USER": _pg_user,
+        "PASSWORD": _pg_password,
+        "HOST": os.getenv("POSTGRES_HOST", "localhost").strip() or "localhost",
+        "PORT": os.getenv("POSTGRES_PORT", "5432").strip() or "5432",
     }
+    if _pg_options:
+        _default_db["OPTIONS"] = _pg_options
+    DATABASES = {"default": _default_db}
 else:
     _sqlite_name = (os.getenv("DJANGO_SQLITE_NAME") or "db.sqlite3").strip()
     DATABASES = {

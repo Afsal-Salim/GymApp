@@ -12,6 +12,7 @@ from businesses.serializers import (
     BusinessCreateSerializer,
     BusinessPublicSerializer,
     BusinessSerializer,
+    BusinessUpdateSerializer,
 )
 
 
@@ -55,24 +56,29 @@ class BusinessDetailView(APIView):
     """
     GET /api/businesses/<slug>/
         Get a single business by slug. Only allowed if owned by the authenticated customer.
+    PATCH /api/businesses/<slug>/
+        Partially update fields on an owned business (same slug in URL as before update,
+        or use new slug after changing it — clients should follow redirects / refetch).
     """
+
+    def _owned_business(self, customer, slug):
+        try:
+            business = Business.objects.prefetch_related("subscriptions__plan").get(
+                slug=slug
+            )
+        except Business.DoesNotExist:
+            return None
+        if business.owner_id != customer.id:
+            return None
+        return business
 
     def get(self, request, slug):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
             return Response(err, status=status.HTTP_401_UNAUTHORIZED)
 
-        try:
-            business = Business.objects.prefetch_related("subscriptions__plan").get(
-                slug=slug
-            )
-        except Business.DoesNotExist:
-            return Response(
-                {"detail": "Not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if business.owner_id != customer.id:
+        business = self._owned_business(customer, slug)
+        if business is None:
             return Response(
                 {"detail": "Not found."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -80,6 +86,31 @@ class BusinessDetailView(APIView):
 
         serializer = BusinessSerializer(business)
         return Response(serializer.data)
+
+    def patch(self, request, slug):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+
+        business = self._owned_business(customer, slug)
+        if business is None:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = BusinessUpdateSerializer(
+            business, data=request.data, partial=True
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+        updated = (
+            Business.objects.prefetch_related("subscriptions__plan")
+            .get(pk=serializer.instance.pk)
+        )
+        return Response(BusinessSerializer(updated).data, status=status.HTTP_200_OK)
 
 
 class BusinessPublicBySlugView(APIView):

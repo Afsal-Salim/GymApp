@@ -4,6 +4,13 @@ from pathlib import Path
 from django.conf import settings
 
 
+def _format_log_message(message: str, context: dict) -> str:
+    if not context:
+        return message
+    tail = " | " + " ".join(f"{k}={v!r}" for k, v in sorted(context.items()))
+    return message + tail
+
+
 class AppLogger:
     """
     Simple application-wide logger that writes to a file.
@@ -33,13 +40,13 @@ class AppLogger:
         self._logger.addHandler(handler)
 
     def info(self, message: str, **kwargs) -> None:
-        self._logger.info(message, extra={"context": kwargs} if kwargs else None)
+        self._logger.info(_format_log_message(message, kwargs))
 
     def warning(self, message: str, **kwargs) -> None:
-        self._logger.warning(message, extra={"context": kwargs} if kwargs else None)
+        self._logger.warning(_format_log_message(message, kwargs))
 
     def error(self, message: str, **kwargs) -> None:
-        self._logger.error(message, extra={"context": kwargs} if kwargs else None)
+        self._logger.error(_format_log_message(message, kwargs))
 
 
 app_logger = AppLogger()

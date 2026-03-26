@@ -5,6 +5,8 @@ from django.http import HttpRequest
 from authentication.models import Customer
 from authentication.tokens import verify_token
 
+from core.logging import app_logger
+
 
 class TokenAuthentication:
     """
@@ -54,5 +56,10 @@ class TokenAuthentication:
         except Customer.DoesNotExist:
             return None, {"detail": "Customer not found"}
 
+        app_logger.info(
+            "Bearer token authenticated",
+            request_id=getattr(request, "_req_log_id", None),
+            customer_id=customer.id,
+        )
         return customer, None
 

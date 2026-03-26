@@ -93,6 +93,41 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+class BusinessUpdateSerializer(serializers.ModelSerializer):
+    """Partial or full update of an owned business (PATCH)."""
+
+    class Meta:
+        model = Business
+        fields = (
+            "name",
+            "slug",
+            "description",
+            "phone",
+            "address",
+            "location_map_url",
+            "website_theme",
+            "website_content",
+        )
+
+    def validate_slug(self, value):
+        qs = Business.objects.filter(slug=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A business with this slug already exists.")
+        return value
+
+    def validate_website_theme(self, value):
+        if value is not None and not isinstance(value, dict):
+            raise serializers.ValidationError("website_theme must be a JSON object.")
+        return value
+
+    def validate_website_content(self, value):
+        if value is not None and not isinstance(value, dict):
+            raise serializers.ValidationError("website_content must be a JSON object.")
+        return value
+
+
 def _text_from_description_lead(lead) -> str:
     if not isinstance(lead, dict):
         return ""
