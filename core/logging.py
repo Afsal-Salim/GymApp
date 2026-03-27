@@ -1,10 +1,10 @@
 import logging
-from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 
 
-def _format_log_message(message: str, context: dict) -> str:
+def _format_log_message(message: str, context: dict[str, Any]) -> str:
     if not context:
         return message
     tail = " | " + " ".join(f"{k}={v!r}" for k, v in sorted(context.items()))
@@ -13,41 +13,34 @@ def _format_log_message(message: str, context: dict) -> str:
 
 class AppLogger:
     """
-    Simple application-wide logger that writes to a file.
+    Application logger for the ``gymapp`` namespace.
 
-    Usage:
-        from core.logging import app_logger
-        app_logger.info("message", extra={"context": "value"})
+    Handlers and levels are configured in ``settings.LOGGING`` (see ``config/settings.py``).
+    Use keyword arguments for structured context; they are appended to the log line.
     """
 
     def __init__(self) -> None:
         self._logger = logging.getLogger("gymapp")
-        if not self._logger.handlers:
-            self._configure()
 
-    def _configure(self) -> None:
-        self._logger.setLevel(logging.INFO)
+    def debug(self, message: str, **kwargs: Any) -> None:
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._logger.debug(_format_log_message(message, kwargs))
 
-        logs_dir = Path(getattr(settings, "LOGS_DIR", settings.BASE_DIR / "logs"))
-        logs_dir.mkdir(parents=True, exist_ok=True)
-        log_file = logs_dir / "gymapp.log"
-
-        handler = logging.FileHandler(log_file)
-        formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s %(message)s"
-        )
-        handler.setFormatter(formatter)
-        self._logger.addHandler(handler)
-
-    def info(self, message: str, **kwargs) -> None:
+    def info(self, message: str, **kwargs: Any) -> None:
         self._logger.info(_format_log_message(message, kwargs))
 
-    def warning(self, message: str, **kwargs) -> None:
+    def warning(self, message: str, **kwargs: Any) -> None:
         self._logger.warning(_format_log_message(message, kwargs))
 
-    def error(self, message: str, **kwargs) -> None:
+    def error(self, message: str, **kwargs: Any) -> None:
         self._logger.error(_format_log_message(message, kwargs))
+
+    def exception(self, message: str, **kwargs: Any) -> None:
+        """Log at ERROR with exception traceback (call from an ``except`` block or with active exception)."""
+        self._logger.error(
+            _format_log_message(message, kwargs),
+            exc_info=True,
+        )
 
 
 app_logger = AppLogger()
-

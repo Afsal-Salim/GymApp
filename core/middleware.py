@@ -51,6 +51,14 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         if query:
             ctx["query"] = query
         app_logger.info("API request received", **ctx)
+        app_logger.debug(
+            "API request meta",
+            request_id=request._req_log_id,
+            content_type=request.META.get("CONTENT_TYPE") or "",
+            content_length=request.META.get("CONTENT_LENGTH") or "",
+            user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:200],
+            referer=(request.META.get("HTTP_REFERER") or "")[:200],
+        )
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -74,6 +82,12 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             user=user_label,
             url_name=url_name,
         )
+        app_logger.debug(
+            "API dispatch args",
+            request_id=_request_id(request),
+            view_args=repr(view_args)[:500],
+            view_kwargs=repr(view_kwargs)[:500],
+        )
         return None
 
     def process_response(self, request, response):
@@ -83,21 +97,41 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         duration_ms = (
             int((time.perf_counter() - start) * 1000) if start is not None else None
         )
+        status_code = getattr(response, "status_code", None)
         app_logger.info(
             "API response sent",
             request_id=_request_id(request),
-            status_code=getattr(response, "status_code", None),
+            status_code=status_code,
             duration_ms=duration_ms,
         )
+        if status_code is not None and status_code >= 500:
+            app_logger.error(
+                "API response indicates server error",
+                request_id=_request_id(request),
+                status_code=status_code,
+                path=request.path,
+                method=request.method,
+            )
+        elif status_code is not None and status_code >= 400:
+            app_logger.debug(
+                "API response client error",
+                request_id=_request_id(request),
+                status_code=status_code,
+                path=request.path,
+            )
         return response
 
     def process_exception(self, request, exception):
         if getattr(request, "_req_log_skip", False):
             return None
-        app_logger.warning(
-            "API request exception",
+        rm = getattr(request, "resolver_match", None)
+        app_logger.exception(
+            "API unhandled exception",
             request_id=_request_id(request),
+            method=request.method,
+            path=request.path,
+            url_name=rm.url_name if rm else None,
             exc_type=type(exception).__name__,
-            exc_message=str(exception)[:500],
+            exc_message=str(exception)[:1000],
         )
         return None

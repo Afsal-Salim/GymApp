@@ -169,6 +169,69 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Logs directory (optional override)
 LOGS_DIR = Path(os.getenv("DJANGO_LOGS_DIR", str(BASE_DIR / "logs")))
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# --- Logging (gymapp + Django integration) ---
+_default_gymapp_level = "DEBUG" if DEBUG else "INFO"
+GYMAPP_LOG_LEVEL = (os.getenv("DJANGO_LOG_LEVEL") or _default_gymapp_level).upper()
+if GYMAPP_LOG_LEVEL not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+    GYMAPP_LOG_LEVEL = _default_gymapp_level
+
+LOG_TO_CONSOLE = _env_bool("DJANGO_LOG_TO_CONSOLE", "true" if DEBUG else "false")
+
+_gymapp_handlers: list[str] = ["gymapp_file"]
+if LOG_TO_CONSOLE:
+    _gymapp_handlers.append("console")
+
+_root_handlers: list[str] = ["gymapp_file"]
+if LOG_TO_CONSOLE:
+    _root_handlers.append("console")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "gymapp": {
+            "format": "{asctime} [{levelname}] {name} | {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "gymapp_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOGS_DIR / "gymapp.log"),
+            "maxBytes": int(os.getenv("DJANGO_LOG_FILE_MAX_BYTES", str(10 * 1024 * 1024))),
+            "backupCount": int(os.getenv("DJANGO_LOG_FILE_BACKUP_COUNT", "5")),
+            "formatter": "gymapp",
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "gymapp",
+        },
+    },
+    "loggers": {
+        "gymapp": {
+            "handlers": _gymapp_handlers,
+            "level": GYMAPP_LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": _gymapp_handlers,
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": _gymapp_handlers,
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": _root_handlers,
+        "level": "WARNING",
+    },
+}
 
 
 # --- Auth token lifetimes ---

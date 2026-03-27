@@ -13,6 +13,21 @@ from authentication.serializers import CustomerSerializer
 from authentication.tokens import create_access_token, create_refresh_token
 
 
+def _google_signin_consent_is_accepted(value) -> bool:
+    """True if client sent 1 or '1' for a policy flag."""
+    return str(value).strip() == "1"
+
+
+def _google_signin_consent_error_body() -> dict:
+    return {
+        "error": "You must accept terms and privacy policy to create an account.",
+        "fields": {
+            "user_content_policy_accepted": "Expected 1",
+            "privacy_policy_accepted": "Expected 1",
+        },
+    }
+
+
 class GoogleSignInView(APIView):
     """
     POST /api/auth/google/
@@ -21,21 +36,9 @@ class GoogleSignInView(APIView):
     - Body: id_token, user_content_policy_accepted, privacy_policy_accepted (1 for new signups)
     - Verifies the token with Google, then finds or creates a Customer.
     - Returns same shape as login: customer, access, refresh.
+
+    Consent helpers live at module level so they cannot be lost inside a class docstring.
     """
-
-    @staticmethod
-    def _consent_validation_error():
-        return {
-            "error": "You must accept terms and privacy policy to create an account.",
-            "fields": {
-                "user_content_policy_accepted": "Expected 1",
-                "privacy_policy_accepted": "Expected 1",
-            },
-        }
-
-    @staticmethod
-    def _is_accepted(value) -> bool:
-        return str(value).strip() == "1"
 
     def post(self, request):
         id_token_str = (request.data.get("id_token") or "").strip()
@@ -129,9 +132,13 @@ class GoogleSignInView(APIView):
                 )
             consent_terms = request.data.get("user_content_policy_accepted")
             consent_privacy = request.data.get("privacy_policy_accepted")
-            if not existing.user_content_policy_accepted and self._is_accepted(consent_terms):
+            if not existing.user_content_policy_accepted and _google_signin_consent_is_accepted(
+                consent_terms
+            ):
                 existing.user_content_policy_accepted = True
-            if not existing.privacy_policy_accepted and self._is_accepted(consent_privacy):
+            if not existing.privacy_policy_accepted and _google_signin_consent_is_accepted(
+                consent_privacy
+            ):
                 existing.privacy_policy_accepted = True
             existing.google_id = google_sub
             existing.save(
@@ -160,9 +167,11 @@ class GoogleSignInView(APIView):
 
         consent_terms = request.data.get("user_content_policy_accepted")
         consent_privacy = request.data.get("privacy_policy_accepted")
-        if not self._is_accepted(consent_terms) or not self._is_accepted(consent_privacy):
+        if not _google_signin_consent_is_accepted(
+            consent_terms
+        ) or not _google_signin_consent_is_accepted(consent_privacy):
             return Response(
-                self._consent_validation_error(),
+                _google_signin_consent_error_body(),
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
