@@ -37,8 +37,17 @@ class GoogleSignInView(APIView):
     - Verifies the token with Google, then finds or creates a Customer.
     - Returns same shape as login: customer, access, refresh.
 
-    Consent helpers live at module level so they cannot be lost inside a class docstring.
+    Module-level helpers are canonical; the static methods below delegate to them so
+    ``self._is_accepted`` / ``self._consent_validation_error`` never break if used again.
     """
+
+    @staticmethod
+    def _is_accepted(value) -> bool:
+        return _google_signin_consent_is_accepted(value)
+
+    @staticmethod
+    def _consent_validation_error() -> dict:
+        return _google_signin_consent_error_body()
 
     def post(self, request):
         id_token_str = (request.data.get("id_token") or "").strip()
