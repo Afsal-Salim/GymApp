@@ -38,7 +38,9 @@ class GoogleSignInView(APIView):
     POST /api/auth/google/
 
     Sign in or sign up with Google.
-    - Body: id_token, user_content_policy_accepted, privacy_policy_accepted (1 for new signups)
+    - Body: id_token (or GIS ``credential``), user_content_policy_accepted,
+      privacy_policy_accepted (1 for new signups). See Google:
+      https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
     - Verifies the token with Google, then finds or creates a Customer.
     - Returns same shape as login: customer, access, refresh.
 
@@ -61,11 +63,17 @@ class GoogleSignInView(APIView):
         try:
             last_step = "read_id_token"
             _google_auth_flow(last_step)
-            id_token_str = (request.data.get("id_token") or "").strip()
+            # Google Identity Services sends the JWT in JSON field "credential" (see verify-google-id-token).
+            id_token_str = (
+                request.data.get("id_token") or request.data.get("credential") or ""
+            ).strip()
             if not id_token_str:
                 _google_auth_flow("exit_400_no_id_token")
                 return Response(
-                    {"error": "id_token is required"},
+                    {
+                        "error": "id_token or credential is required",
+                        "hint": "GIS One Tap posts the JWT as 'credential'; you may forward it as id_token.",
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             _google_auth_flow(
