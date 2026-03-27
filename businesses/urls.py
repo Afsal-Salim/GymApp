@@ -10,6 +10,11 @@ urlpatterns = [
         name="business-website-setup",
     ),
     path(
+        "analytics/",
+        views.WebsiteAnalyticsOverviewView.as_view(),
+        name="business-websites-analytics-overview",
+    ),
+    path(
         "public/<slug:slug>/crystal-leads/",
         views.CrystalLeadCreateView.as_view(),
         name="business-crystal-leads-create",
@@ -23,6 +28,11 @@ urlpatterns = [
         "<slug:slug>/crystal-leads/analytics/",
         views.CrystalLeadAnalyticsView.as_view(),
         name="business-crystal-leads-analytics",
+    ),
+    path(
+        "<slug:slug>/analytics/",
+        views.WebsiteAnalyticsView.as_view(),
+        name="business-website-analytics",
     ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(

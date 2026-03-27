@@ -9,13 +9,14 @@ from .otp import SendOTPView, VerifyOTPView
 from .pages import LoginPageView, SignupPageView
 from .password_reset import ForgotPasswordView, ResetPasswordView, VerifyResetOTPView
 from .registration import LoginView, SignupView
-from .session import RefreshView
+from .session import MeView, RefreshView
 
 __all__ = [
     "ForgotPasswordView",
     "GoogleSignInView",
     "LoginPageView",
     "LoginView",
+    "MeView",
     "RefreshView",
     "ResetPasswordView",
     "SendOTPView",

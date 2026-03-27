@@ -90,3 +90,25 @@ def lead_event_counts_by_type(business):
         row["lead_type"]: {"events": row["events"], "units": row["units"] or 0}
         for row in rows
     }
+
+
+def website_analytics_for_business(business):
+    """
+    Full analytics payload for one website (Crystal leads + WhatsApp aggregates).
+    Used by GET /api/businesses/<slug>/analytics/ and the multi-site overview.
+    """
+    qs = CrystalLead.objects.filter(business=business)
+    total_units = qs.aggregate(t=Sum("quantity"))["t"] or 0
+    return {
+        "business": {
+            "slug": business.slug,
+            "name": business.name,
+        },
+        "whatsapp": whatsapp_analytics_for_business(business),
+        "leads_by_type": lead_event_counts_by_type(business),
+        "totals": {
+            "lead_events": qs.count(),
+            "units": int(total_units),
+        },
+        "computed_at": timezone.now().isoformat(),
+    }

@@ -2,10 +2,30 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.authentication import TokenAuthentication
 from core.logging import app_logger
 
 from authentication.models import Customer
 from authentication.tokens import create_access_token, verify_token
+
+
+class MeView(APIView):
+    """
+    GET /api/auth/me/
+
+    Returns the authenticated customer's email and username (Bearer access token).
+    """
+
+    def get(self, request):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {
+                "email": customer.email,
+                "username": customer.username,
+            }
+        )
 
 
 class RefreshView(APIView):
