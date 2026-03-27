@@ -15,6 +15,13 @@ from authentication.tokens import create_access_token, create_refresh_token
 
 class GoogleSignInView(APIView):
     """
+    POST /api/auth/google/
+
+    Sign in or sign up with Google.
+    - Body: id_token, user_content_policy_accepted, privacy_policy_accepted (1 for new signups)
+    - Verifies the token with Google, then finds or creates a Customer.
+    - Returns same shape as login: customer, access, refresh.
+    """
 
     @staticmethod
     def _consent_validation_error():
@@ -29,13 +36,6 @@ class GoogleSignInView(APIView):
     @staticmethod
     def _is_accepted(value) -> bool:
         return str(value).strip() == "1"
-    POST /api/auth/google/
-
-    Sign in or sign up with Google.
-    - Body: { "id_token": "<Google ID token from frontend>" }
-    - Verifies the token with Google, then finds or creates a Customer.
-    - Returns same shape as login: customer, access, refresh.
-    """
 
     def post(self, request):
         id_token_str = (request.data.get("id_token") or "").strip()
