@@ -7,6 +7,7 @@ Import from ``businesses.views`` (this package) — same public API as before th
 from .analytics import WebsiteAnalyticsOverviewView, WebsiteAnalyticsView
 from .business import (
     BusinessActiveSubscriptionView,
+    CurrentSubscriptionDetailView,
     BusinessDetailView,
     BusinessListCreateView,
     BusinessPublicBySlugView,
@@ -18,6 +19,7 @@ __all__ = [
     "WebsiteAnalyticsOverviewView",
     "WebsiteAnalyticsView",
     "BusinessActiveSubscriptionView",
+    "CurrentSubscriptionDetailView",
     "BusinessDetailView",
     "BusinessListCreateView",
     "BusinessPublicBySlugView",

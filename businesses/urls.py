@@ -34,6 +34,11 @@ urlpatterns = [
         views.WebsiteAnalyticsView.as_view(),
         name="business-website-analytics",
     ),
+    path(
+        "<slug:slug>/subscription/",
+        views.CurrentSubscriptionDetailView.as_view(),
+        name="business-current-subscription",
+    ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(
         "<slug:slug>/active-subscription/",

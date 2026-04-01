@@ -11,6 +11,7 @@ from authentication.serializers import (
     SignupSerializer,
 )
 from authentication.tokens import create_access_token, create_refresh_token
+from core.email_notifications import notify_new_potential_client
 
 
 class SignupView(APIView):
@@ -79,6 +80,13 @@ class SignupView(APIView):
         )
         customer.set_password(password)
         customer.save()
+
+        notify_new_potential_client(
+            email=customer.email,
+            username=customer.username,
+            customer_id=customer.id,
+            source="email_signup",
+        )
 
         access = create_access_token(customer)
         refresh = create_refresh_token(customer)

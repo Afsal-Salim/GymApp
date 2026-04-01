@@ -1,5 +1,3 @@
-from django.utils import timezone
-
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +12,8 @@ from businesses.serializers import (
     BusinessSerializer,
     BusinessUpdateSerializer,
 )
+from businesses.subscription_helpers import get_active_subscription_for_business
+from subscriptions.serializers import CurrentSubscriptionSerializer
 
 
 class BusinessListCreateView(APIView):
@@ -133,6 +133,41 @@ class BusinessPublicBySlugView(APIView):
         return Response(BusinessPublicSerializer(business).data)
 
 
+class CurrentSubscriptionDetailView(APIView):
+    """
+    GET /api/businesses/<slug>/subscription/
+
+    Owner only. Current active subscription with full plan (price, duration, features).
+    """
+
+    def get(self, request, slug):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            business = Business.objects.get(slug=slug)
+        except Business.DoesNotExist:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if business.owner_id != customer.id:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        active = get_active_subscription_for_business(business)
+        payload = {
+            "business": {"slug": business.slug, "name": business.name},
+            "has_active_subscription": bool(active),
+            "subscription": CurrentSubscriptionSerializer(active).data if active else None,
+        }
+        return Response(payload)
+
+
 class BusinessActiveSubscriptionView(APIView):
     """
     GET /api/businesses/<slug>/active-subscription/
@@ -150,13 +185,7 @@ class BusinessActiveSubscriptionView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        today = timezone.now().date()
-        active = (
-            business.subscriptions.filter(subscription_end_date__gte=today)
-            .select_related("plan")
-            .order_by("-subscription_end_date")
-            .first()
-        )
+        active = get_active_subscription_for_business(business)
 
         if not active:
             return Response(

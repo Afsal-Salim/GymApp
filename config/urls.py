@@ -18,11 +18,15 @@ from django.contrib import admin
 from django.urls import path, include
 
 from authentication.views import LoginPageView, SignupPageView
+from core.views import HomePageView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", HomePageView.as_view(), name="home_page"),
     path("login/", LoginPageView.as_view(), name="login_page"),
     path("signup/", SignupPageView.as_view(), name="signup_page"),
+    path("api/public/", include("core.urls")),
+    path("api/support/", include("core.support_urls")),
     path("api/auth/", include("authentication.urls")),
     path("api/businesses/", include("businesses.urls")),
     path("api/payments/", include("payments.urls")),

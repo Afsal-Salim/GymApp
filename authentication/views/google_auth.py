@@ -11,6 +11,7 @@ from core.logging import app_logger
 from authentication.models import Customer
 from authentication.serializers import CustomerSerializer
 from authentication.tokens import create_access_token, create_refresh_token
+from core.email_notifications import notify_new_potential_client
 
 
 def _google_signin_consent_is_accepted(value) -> bool:
@@ -259,6 +260,13 @@ class GoogleSignInView(APIView):
             last_step = "new_user_save_customer"
             _google_auth_flow(last_step)
             customer.save()
+
+            notify_new_potential_client(
+                email=customer.email,
+                username=customer.username,
+                customer_id=customer.id,
+                source="google_signup",
+            )
 
             last_step = "new_user_create_tokens"
             _google_auth_flow(last_step)

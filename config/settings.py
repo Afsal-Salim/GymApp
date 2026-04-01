@@ -282,4 +282,21 @@ OTP_PASSWORD_RESET_EMAIL_SUBJECT = os.getenv(
 CRYSTAL_LEAD_OWNER_EMAIL_SUBJECT = (os.getenv("CRYSTAL_LEAD_OWNER_EMAIL_SUBJECT") or "").strip()
 
 
+# Team inbox (new signups + website enquiries). Use the same Gmail as SMTP user for simplest setup.
+CRYSTAL_TEAM_NOTIFY_EMAIL = (
+    os.getenv("CRYSTAL_TEAM_NOTIFY_EMAIL") or "crystal.gym.in@gmail.com"
+).strip()
+NEW_USER_NOTIFY_ENABLED = _env_bool("NEW_USER_NOTIFY_ENABLED", "true")
+NEW_USER_NOTIFY_SUBJECT = (
+    os.getenv("NEW_USER_NOTIFY_SUBJECT") or "New potential client – Crystal Gym"
+).strip()
+SITE_ENQUIRY_EMAIL_SUBJECT = (
+    os.getenv("SITE_ENQUIRY_EMAIL_SUBJECT") or "Website enquiry – Crystal Gym"
+).strip()
+
+CLIENT_SUPPORT_EMAIL_SUBJECT_PREFIX = (
+    os.getenv("CLIENT_SUPPORT_EMAIL_SUBJECT_PREFIX") or "[Crystal Gym]"
+).strip()
+
+
 GOOGLE_OAUTH_CLIENT_ID = (os.getenv("GOOGLE_OAUTH_CLIENT_ID") or "").strip()

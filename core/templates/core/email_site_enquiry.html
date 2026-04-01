@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website enquiry</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08); overflow: hidden;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); padding: 32px 28px; text-align: center;">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">Crystal Gym</h1>
+              <p style="margin: 12px 0 0; font-size: 14px; color: #94a3b8;">New website enquiry</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 28px 28px 8px;">
+              <p style="margin: 0 0 20px; font-size: 15px; color: #334155; line-height: 1.5;">Someone submitted the contact form on your home page. You can reply directly to their email (Reply-To is set).</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; width: 32%; vertical-align: top;">Name</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #0f172a; vertical-align: top; font-weight: 600;">{{ name }}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; vertical-align: top;">Email</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 15px; vertical-align: top;">
+                    <a href="mailto:{{ email }}" style="color: #2563eb; text-decoration: none;">{{ email }}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 28px 28px;">
+              <p style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;">Message</p>
+              <div style="padding: 16px 18px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 15px; color: #334155; line-height: 1.55; white-space: pre-wrap;">{{ message }}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 28px 28px;">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">This email was generated automatically from the Crystal Gym website enquiry form.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
