@@ -1,7 +1,7 @@
 """Email alerts to the Crystal team (new signups, website enquiries)."""
 
 from django.conf import settings
-from django.core.mail import EmailMessage, EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 from core.logging import app_logger
@@ -34,19 +34,37 @@ def notify_new_potential_client(
         return
 
     subject = getattr(settings, "NEW_USER_NOTIFY_SUBJECT", "New potential client – Crystal Gym")
-    body = (
-        f"A new user signed up on Crystal Gym.\n\n"
-        f"Treat as: potential client\n"
-        f"Source: {source}\n"
+    source_label = {
+        "email_signup": "Email signup",
+        "google": "Google sign-in",
+    }.get(source, source.replace("_", " ").title())
+    context = {
+        "email": email,
+        "username": username,
+        "customer_id": customer_id,
+        "source": source,
+        "source_label": source_label,
+    }
+    html_body = render_to_string("core/email_new_potential_client.html", context)
+    plain_body = (
+        "A new user signed up on Crystal Gym.\n\n"
+        "Treat as: potential client\n"
+        f"Source: {source_label}\n"
         f"Username: {username}\n"
         f"Email: {email}\n"
         f"Customer ID: {customer_id}\n"
     )
     try:
-        kwargs = {"subject": subject, "body": body, "from_email": from_email, "to": [to]}
+        alt_kwargs = {
+            "subject": subject,
+            "body": plain_body,
+            "from_email": from_email,
+            "to": [to],
+        }
         if email:
-            kwargs["reply_to"] = [email]
-        msg = EmailMessage(**kwargs)
+            alt_kwargs["reply_to"] = [email]
+        msg = EmailMultiAlternatives(**alt_kwargs)
+        msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
         app_logger.info("New user notify email sent", customer_id=customer_id, source=source)
     except Exception as e:
