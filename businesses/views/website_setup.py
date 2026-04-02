@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.authentication import TokenAuthentication
+from core.authentication import TokenAuthentication, token_auth_error_response
 
 from businesses.models import Business
 from businesses.serializers import BusinessSerializer, CrystalWebsiteSetupSerializer
@@ -20,7 +20,7 @@ class CrystalWebsiteSetupView(APIView):
     def post(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
         serializer = CrystalWebsiteSetupSerializer(data=request.data)
         if not serializer.is_valid():

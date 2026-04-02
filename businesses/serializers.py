@@ -1,8 +1,9 @@
 from rest_framework import serializers
 
+from core.record_status import RECORD_STATUS_CHOICES
 from subscriptions.models import Subscription
 
-from .models import Business
+from .models import Business, BusinessEnquiry, CrystalLead
 
 
 class SubscriptionListSerializer(serializers.ModelSerializer):
@@ -128,6 +129,12 @@ class BusinessUpdateSerializer(serializers.ModelSerializer):
         return value
 
 
+class BusinessRecordStatusSerializer(serializers.Serializer):
+    """POST body for soft delete / re-activate via record_status."""
+
+    record_status = serializers.ChoiceField(choices=RECORD_STATUS_CHOICES)
+
+
 def _text_from_description_lead(lead) -> str:
     if not isinstance(lead, dict):
         return ""
@@ -221,4 +228,94 @@ class CrystalWebsiteSetupSerializer(serializers.Serializer):
                         address = val[:5000]
 
         return phone, address, location_map_url
+
+
+MODAL_LEAD_TYPES = (
+    CrystalLead.LEAD_JOIN_NOW,
+    CrystalLead.LEAD_BOOK_FREE_TRIAL,
+    CrystalLead.LEAD_PLAN_VISIT,
+)
+
+# Omitted from API payload — only used by management commands to purge seed rows.
+_INTERNAL_LEAD_PAYLOAD_KEYS = frozenset({"seed_perfect_sample", "seed_owner_demo"})
+
+
+class CrystalLeadModalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CrystalLead
+        fields = (
+            "id",
+            "lead_type",
+            "payload",
+            "quantity",
+            "submitted_at_ms",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        p = data.get("payload")
+        if isinstance(p, dict):
+            cleaned = {k: v for k, v in p.items() if k not in _INTERNAL_LEAD_PAYLOAD_KEYS}
+            if cleaned.get("seed") is True:
+                cleaned = {k: v for k, v in cleaned.items() if k != "seed"}
+            data["payload"] = cleaned
+        return data
+
+
+class CrystalLeadModalPatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CrystalLead
+        fields = ("record_status",)
+
+
+class BusinessEnquiryCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessEnquiry
+        fields = ("name", "email", "message")
+
+    def validate_message(self, value: str) -> str:
+        text = (value or "").strip()
+        if len(text) < 3:
+            raise serializers.ValidationError("Message is too short.")
+        return text
+
+
+class BusinessEnquirySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessEnquiry
+        fields = (
+            "id",
+            "business",
+            "name",
+            "email",
+            "message",
+            "enquiry_status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "business", "created_at", "updated_at")
+
+
+class BusinessEnquiryOwnerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessEnquiry
+        fields = (
+            "id",
+            "name",
+            "email",
+            "message",
+            "enquiry_status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class BusinessEnquiryPatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessEnquiry
+        fields = ("enquiry_status", "record_status")
 

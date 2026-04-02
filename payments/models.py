@@ -1,6 +1,7 @@
 from django.db import models
 
 from businesses.models import Business
+from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_CHOICES
 
 
 class Payment(models.Model):
@@ -12,7 +13,14 @@ class Payment(models.Model):
     currency = models.CharField(max_length=10, default="INR")
     payment_status = models.CharField(max_length=50)
     payment_method = models.CharField(max_length=50, blank=True)
+    record_status = models.CharField(
+        max_length=16,
+        choices=RECORD_STATUS_CHOICES,
+        default=RECORD_STATUS_ACTIVE,
+        db_index=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return f"{self.business.name} - {self.amount} {self.currency}"

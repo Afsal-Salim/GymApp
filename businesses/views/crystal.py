@@ -1,8 +1,12 @@
+from django.shortcuts import get_object_or_404
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.authentication import TokenAuthentication
+from core.authentication import TokenAuthentication, token_auth_error_response
+from core.pagination import paginated_response
+from core.record_status import RECORD_STATUS_ACTIVE
 
 from businesses.crystal_leads import (
     lead_event_counts_by_type,
@@ -11,6 +15,14 @@ from businesses.crystal_leads import (
 )
 from businesses.emails import send_crystal_lead_owner_email
 from businesses.models import Business, CrystalLead
+from businesses.serializers import (
+    MODAL_LEAD_TYPES,
+    CrystalLeadModalPatchSerializer,
+    CrystalLeadModalSerializer,
+)
+from businesses.search_filters import crystal_modal_lead_search_q
+from businesses.views.owned_business import get_owned_business
+from businesses.visibility import active_businesses
 
 
 class CrystalLeadCreateView(APIView):
@@ -22,7 +34,7 @@ class CrystalLeadCreateView(APIView):
 
     def post(self, request, slug):
         try:
-            business = Business.objects.select_related("owner").get(slug=slug)
+            business = active_businesses().select_related("owner").get(slug=slug)
         except Business.DoesNotExist:
             return Response(
                 {"detail": "No business found for this slug.", "slug": slug},
@@ -74,21 +86,11 @@ class CrystalLeadAnalyticsView(APIView):
     def get(self, request, slug):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
-        try:
-            business = Business.objects.get(slug=slug)
-        except Business.DoesNotExist:
-            return Response(
-                {"detail": "Not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if business.owner_id != customer.id:
-            return Response(
-                {"detail": "Not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        business, denied = get_owned_business(customer, slug)
+        if denied:
+            return denied
 
         return Response(
             {
@@ -97,3 +99,102 @@ class CrystalLeadAnalyticsView(APIView):
                 "all_leads": lead_event_counts_by_type(business),
             }
         )
+
+
+class CrystalLeadOwnerListView(APIView):
+    """
+    GET /api/businesses/<slug>/crystal-leads/
+
+    Owner only. Lists join_now, book_free_trial, plan_visit for this business.
+    Query: lead_type (optional), record_status (optional),
+    search or q (optional) — case-insensitive match on payload name, email,
+    message, or notes.
+    """
+
+    def get(self, request, slug):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return token_auth_error_response(err)
+
+        business, denied = get_owned_business(customer, slug)
+        if denied:
+            return denied
+
+        qs = CrystalLead.objects.filter(
+            business=business,
+            lead_type__in=MODAL_LEAD_TYPES,
+        ).order_by("-created_at")
+
+        lt = (request.query_params.get("lead_type") or "").strip()
+        if lt:
+            if lt not in MODAL_LEAD_TYPES:
+                return Response(
+                    {
+                        "detail": "Invalid lead_type for this list.",
+                        "allowed": list(MODAL_LEAD_TYPES),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(lead_type=lt)
+
+        rs = request.query_params.get("record_status")
+        if rs:
+            qs = qs.filter(record_status=rs)
+        else:
+            qs = qs.filter(record_status=RECORD_STATUS_ACTIVE)
+
+        search = (
+            request.query_params.get("search") or request.query_params.get("q") or ""
+        ).strip()
+        if search:
+            qs = qs.filter(crystal_modal_lead_search_q(search))
+
+        return paginated_response(request, qs, CrystalLeadModalSerializer)
+
+
+class CrystalLeadOwnerDetailView(APIView):
+    """
+    GET, PATCH /api/businesses/<slug>/crystal-leads/<id>/
+
+    Owner only. Single modal lead (join_now / book_free_trial / plan_visit).
+    """
+
+    def get(self, request, slug, pk):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return token_auth_error_response(err)
+
+        business, denied = get_owned_business(customer, slug)
+        if denied:
+            return denied
+
+        lead = get_object_or_404(
+            CrystalLead.objects.filter(
+                business=business,
+                lead_type__in=MODAL_LEAD_TYPES,
+            ),
+            pk=pk,
+        )
+        return Response(CrystalLeadModalSerializer(lead).data)
+
+    def patch(self, request, slug, pk):
+        customer, err = TokenAuthentication().authenticate(request)
+        if err:
+            return token_auth_error_response(err)
+
+        business, denied = get_owned_business(customer, slug)
+        if denied:
+            return denied
+
+        lead = get_object_or_404(
+            CrystalLead.objects.filter(
+                business=business,
+                lead_type__in=MODAL_LEAD_TYPES,
+            ),
+            pk=pk,
+        )
+        ser = CrystalLeadModalPatchSerializer(lead, data=request.data, partial=True)
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        ser.save()
+        return Response(CrystalLeadModalSerializer(lead).data)

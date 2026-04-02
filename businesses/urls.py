@@ -20,6 +20,11 @@ urlpatterns = [
         name="business-crystal-leads-create",
     ),
     path(
+        "public/<slug:slug>/enquiries/",
+        views.BusinessEnquiryPublicCreateView.as_view(),
+        name="business-public-enquiry-create",
+    ),
+    path(
         "public/<slug:slug>/",
         views.BusinessPublicBySlugView.as_view(),
         name="business-public-by-slug",
@@ -30,6 +35,26 @@ urlpatterns = [
         name="business-crystal-leads-analytics",
     ),
     path(
+        "<slug:slug>/crystal-leads/<int:pk>/",
+        views.CrystalLeadOwnerDetailView.as_view(),
+        name="business-crystal-lead-detail",
+    ),
+    path(
+        "<slug:slug>/crystal-leads/",
+        views.CrystalLeadOwnerListView.as_view(),
+        name="business-crystal-lead-list",
+    ),
+    path(
+        "<slug:slug>/enquiries/<int:pk>/",
+        views.BusinessEnquiryOwnerDetailView.as_view(),
+        name="business-enquiry-detail",
+    ),
+    path(
+        "<slug:slug>/enquiries/",
+        views.BusinessEnquiryOwnerListView.as_view(),
+        name="business-enquiry-list",
+    ),
+    path(
         "<slug:slug>/analytics/",
         views.WebsiteAnalyticsView.as_view(),
         name="business-website-analytics",
@@ -38,6 +63,16 @@ urlpatterns = [
         "<slug:slug>/subscription/",
         views.CurrentSubscriptionDetailView.as_view(),
         name="business-current-subscription",
+    ),
+    path(
+        "<slug:slug>/record-status/",
+        views.BusinessRecordStatusView.as_view(),
+        name="business-record-status",
+    ),
+    path(
+        "<slug:slug>/first-recharge/",
+        views.FirstRechargeEligibilityView.as_view(),
+        name="business-first-recharge",
     ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(

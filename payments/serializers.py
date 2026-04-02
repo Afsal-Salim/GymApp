@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
 from businesses.models import Business
+from core.record_status import RECORD_STATUS_ACTIVE
 from plans.models import Plan
+from subscriptions.models import Subscription
 
 from .models import Payment
 
@@ -21,7 +23,12 @@ class CreateOrderSerializer(serializers.Serializer):
     email = serializers.EmailField(write_only=True)
     business_slug = serializers.SlugField(write_only=True)
     plan_id = serializers.PrimaryKeyRelatedField(
-        queryset=Plan.objects.all(), required=False, allow_null=True
+        queryset=Plan.objects.filter(
+            record_status=RECORD_STATUS_ACTIVE,
+            coming_soon=False,
+        ),
+        required=False,
+        allow_null=True,
     )
     amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, allow_null=True
@@ -31,7 +38,10 @@ class CreateOrderSerializer(serializers.Serializer):
     def validate(self, attrs):
         slug = attrs["business_slug"]
         try:
-            attrs["business_id"] = Business.objects.get(slug=slug)
+            attrs["business_id"] = Business.objects.get(
+                slug=slug,
+                record_status=RECORD_STATUS_ACTIVE,
+            )
         except Business.DoesNotExist:
             raise serializers.ValidationError(
                 {"business_slug": "No business found for this slug."}
@@ -47,7 +57,14 @@ class CreateOrderSerializer(serializers.Serializer):
         if not plan and amount is None:
             raise serializers.ValidationError("Provide plan_id or amount.")
         if plan:
-            attrs["amount"] = plan.price
+            business = attrs["business_id"]
+            if (
+                plan.first_activation_price is not None
+                and not Subscription.objects.filter(business=business).exists()
+            ):
+                attrs["amount"] = plan.first_activation_price
+            else:
+                attrs["amount"] = plan.price
             attrs["plan"] = plan
         elif amount is not None and amount <= 0:
             raise serializers.ValidationError("amount must be positive.")
@@ -66,13 +83,21 @@ class VerifyPaymentSerializer(serializers.Serializer):
     email = serializers.EmailField(write_only=True)
     business_slug = serializers.SlugField(write_only=True)
     plan_id = serializers.PrimaryKeyRelatedField(
-        queryset=Plan.objects.all(), required=False, allow_null=True
+        queryset=Plan.objects.filter(
+            record_status=RECORD_STATUS_ACTIVE,
+            coming_soon=False,
+        ),
+        required=False,
+        allow_null=True,
     )
 
     def validate(self, attrs):
         slug = attrs["business_slug"]
         try:
-            attrs["business_id"] = Business.objects.get(slug=slug)
+            attrs["business_id"] = Business.objects.get(
+                slug=slug,
+                record_status=RECORD_STATUS_ACTIVE,
+            )
         except Business.DoesNotExist:
             raise serializers.ValidationError(
                 {"business_slug": "No business found for this slug."}

@@ -2,13 +2,15 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.authentication import TokenAuthentication
+from core.authentication import TokenAuthentication, token_auth_error_response
+from core.record_status import RECORD_STATUS_ACTIVE
 
 from businesses.crystal_leads import (
     resolve_analytics_preset,
     website_analytics_for_business,
 )
 from businesses.models import Business
+from businesses.views.owned_business import get_owned_business
 
 
 class WebsiteAnalyticsView(APIView):
@@ -25,21 +27,11 @@ class WebsiteAnalyticsView(APIView):
     def get(self, request, slug):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
-        try:
-            business = Business.objects.get(slug=slug)
-        except Business.DoesNotExist:
-            return Response(
-                {"detail": "Not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if business.owner_id != customer.id:
-            return Response(
-                {"detail": "Not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        business, denied = get_owned_business(customer, slug)
+        if denied:
+            return denied
 
         preset, allowed = resolve_analytics_preset(request.query_params.get("range"))
         if preset is None:
@@ -66,7 +58,7 @@ class WebsiteAnalyticsOverviewView(APIView):
     def get(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
         preset, allowed = resolve_analytics_preset(request.query_params.get("range"))
         if preset is None:
@@ -78,7 +70,10 @@ class WebsiteAnalyticsOverviewView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        businesses = Business.objects.filter(owner=customer).order_by("name")
+        businesses = Business.objects.filter(
+            owner=customer,
+            record_status=RECORD_STATUS_ACTIVE,
+        ).order_by("name")
         return Response(
             {
                 "range_applied": preset,

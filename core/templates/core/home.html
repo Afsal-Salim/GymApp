@@ -46,8 +46,9 @@
       <a class="btn btn-primary" href="/login/">Log in</a>
       <a class="btn btn-ghost" href="/signup/">Sign up</a>
       <button type="button" class="btn btn-ghost" id="open-enquiry">Enquiry</button>
+      <button type="button" class="btn btn-ghost" id="open-service-enquiry">Services</button>
     </div>
-    <p class="note">Questions? Use Enquiry — we’ll get your message at our team inbox.</p>
+    <p class="note">General questions: Enquiry. Custom setup / demos: Services.</p>
   </div>
 
   <div class="modal-backdrop" id="enquiry-backdrop" role="dialog" aria-modal="true" aria-labelledby="enquiry-title">
@@ -71,6 +72,40 @@
         <div class="row">
           <button type="button" class="btn-close" id="close-enquiry">Cancel</button>
           <button type="submit" class="btn-submit" id="enquiry-submit">Send</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="service-enquiry-backdrop" role="dialog" aria-modal="true" aria-labelledby="service-enquiry-title">
+    <div class="modal">
+      <h2 id="service-enquiry-title">Service enquiry</h2>
+      <p class="sub">Tell us what you need — include phone so we can reach you.</p>
+      <form id="service-enquiry-form">
+        <div class="form-group">
+          <label for="svc-name">Name</label>
+          <input type="text" id="svc-name" name="name" required maxlength="200" placeholder="Your name" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="svc-email">Email</label>
+          <input type="email" id="svc-email" name="email" required placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="svc-phone">Phone</label>
+          <input type="tel" id="svc-phone" name="phone" required maxlength="50" placeholder="+91 …" autocomplete="tel">
+        </div>
+        <div class="form-group">
+          <label for="svc-topic">Service / topic <span style="font-weight:400;color:#64748b">(optional)</span></label>
+          <input type="text" id="svc-topic" name="service_topic" maxlength="255" placeholder="e.g. Website setup, billing integration">
+        </div>
+        <div class="form-group">
+          <label for="svc-message">Message</label>
+          <textarea id="svc-message" name="message" required maxlength="5000" placeholder="Describe what you’re looking for"></textarea>
+        </div>
+        <div class="msg" id="service-enquiry-msg"></div>
+        <div class="row">
+          <button type="button" class="btn-close" id="close-service-enquiry">Cancel</button>
+          <button type="submit" class="btn-submit" id="service-enquiry-submit">Send</button>
         </div>
       </form>
     </div>
@@ -126,6 +161,82 @@
             submitBtn.disabled = false;
             if (res.ok) {
               msg.textContent = 'Thanks — we received your message.';
+              msg.className = 'msg ok';
+              form.reset();
+              setTimeout(hideModal, 2000);
+            } else {
+              var err = res.data;
+              var text = (err.detail && (typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)))
+                || err.message || 'Something went wrong. Please try again.';
+              if (typeof err === 'object' && err !== null) {
+                var parts = [];
+                for (var k in err) {
+                  if (Array.isArray(err[k])) parts.push(k + ': ' + err[k].join(', '));
+                }
+                if (parts.length) text = parts.join(' ');
+              }
+              msg.textContent = text;
+              msg.className = 'msg err';
+            }
+          })
+          .catch(function() {
+            submitBtn.disabled = false;
+            msg.textContent = 'Network error. Please try again.';
+            msg.className = 'msg err';
+          });
+      });
+    })();
+    (function() {
+      var backdrop = document.getElementById('service-enquiry-backdrop');
+      var openBtn = document.getElementById('open-service-enquiry');
+      var closeBtn = document.getElementById('close-service-enquiry');
+      var form = document.getElementById('service-enquiry-form');
+      var msg = document.getElementById('service-enquiry-msg');
+      var submitBtn = document.getElementById('service-enquiry-submit');
+
+      function showModal() {
+        backdrop.classList.add('open');
+        msg.textContent = '';
+        msg.className = 'msg';
+        document.getElementById('svc-name').focus();
+      }
+      function hideModal() {
+        backdrop.classList.remove('open');
+      }
+
+      openBtn.addEventListener('click', showModal);
+      closeBtn.addEventListener('click', hideModal);
+      backdrop.addEventListener('click', function(e) {
+        if (e.target === backdrop) hideModal();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop.classList.contains('open')) hideModal();
+      });
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        msg.textContent = '';
+        msg.className = 'msg';
+        submitBtn.disabled = true;
+
+        var payload = {
+          name: document.getElementById('svc-name').value.trim(),
+          email: document.getElementById('svc-email').value.trim(),
+          phone: document.getElementById('svc-phone').value.trim(),
+          service_topic: document.getElementById('svc-topic').value.trim(),
+          message: document.getElementById('svc-message').value.trim()
+        };
+
+        fetch('/api/public/service-enquiries/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+          .then(function(res) {
+            submitBtn.disabled = false;
+            if (res.ok) {
+              msg.textContent = 'Thanks — we received your service enquiry.';
               msg.className = 'msg ok';
               form.reset();
               setTimeout(hideModal, 2000);

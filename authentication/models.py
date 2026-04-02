@@ -7,6 +7,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_CHOICES
+
 
 class Customer(models.Model):
     AUTH_PROVIDER_EMAIL = "email"
@@ -27,6 +29,12 @@ class Customer(models.Model):
     google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     user_content_policy_accepted = models.BooleanField(default=False)
     privacy_policy_accepted = models.BooleanField(default=False)
+    record_status = models.CharField(
+        max_length=16,
+        choices=RECORD_STATUS_CHOICES,
+        default=RECORD_STATUS_ACTIVE,
+        db_index=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,6 +77,13 @@ class EmailOTP(models.Model):
         default=PURPOSE_SIGNUP,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    record_status = models.CharField(
+        max_length=16,
+        choices=RECORD_STATUS_CHOICES,
+        default=RECORD_STATUS_ACTIVE,
+        db_index=True,
+    )
     is_verified = models.BooleanField(default=False)
 
     def is_expired(self):

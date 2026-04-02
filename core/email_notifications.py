@@ -57,8 +57,16 @@ def notify_new_potential_client(
         )
 
 
-def notify_site_enquiry(*, name: str, email: str, message: str) -> None:
-    """Send website enquiry to team inbox. Reply-To is the visitor."""
+def notify_site_enquiry(
+    *,
+    name: str,
+    email: str,
+    message: str,
+    phone: str = "",
+    service_topic: str = "",
+    enquiry_kind: str = "general",
+) -> None:
+    """Send website / service enquiry to team inbox. Reply-To is the visitor."""
     to = _team_inbox()
     if not to:
         app_logger.warning("Enquiry email skipped: CRYSTAL_TEAM_NOTIFY_EMAIL not set")
@@ -68,19 +76,46 @@ def notify_site_enquiry(*, name: str, email: str, message: str) -> None:
         app_logger.warning("Enquiry email skipped: DEFAULT_FROM_EMAIL not set")
         return
 
-    subject = getattr(
-        settings,
-        "SITE_ENQUIRY_EMAIL_SUBJECT",
-        "Website enquiry – Crystal Gym",
+    is_service = enquiry_kind == "service"
+    subject = (
+        getattr(
+            settings,
+            "SERVICE_ENQUIRY_EMAIL_SUBJECT",
+            "Service enquiry – Crystal Gym",
+        )
+        if is_service
+        else getattr(
+            settings,
+            "SITE_ENQUIRY_EMAIL_SUBJECT",
+            "Website enquiry – Crystal Gym",
+        )
     )
-    context = {"name": name, "email": email, "message": message}
+    context = {
+        "name": name,
+        "email": email,
+        "message": message,
+        "phone": (phone or "").strip(),
+        "service_topic": (service_topic or "").strip(),
+        "enquiry_kind": enquiry_kind,
+        "is_service": is_service,
+    }
     html_body = render_to_string("core/email_site_enquiry.html", context)
-    plain_body = (
-        f"New enquiry from the Crystal Gym website.\n\n"
-        f"Name: {name}\n"
-        f"Email: {email}\n\n"
-        f"Message:\n{message}\n"
-    )
+    plain_lines = [
+        (
+            "New service enquiry from the Crystal Gym website."
+            if is_service
+            else "New enquiry from the Crystal Gym website."
+        ),
+        "",
+        f"Name: {name}",
+        f"Email: {email}",
+    ]
+    if context["phone"]:
+        plain_lines.append(f"Phone: {context['phone']}")
+    if context["service_topic"]:
+        plain_lines.append(f"Service / topic: {context['service_topic']}")
+    plain_lines.extend(["", "Message:", message])
+    plain_body = "\n".join(plain_lines)
     try:
         alt_kwargs = {
             "subject": subject,

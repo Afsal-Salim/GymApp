@@ -26,6 +26,7 @@ urlpatterns = [
     path("login/", LoginPageView.as_view(), name="login_page"),
     path("signup/", SignupPageView.as_view(), name="signup_page"),
     path("api/public/", include("core.urls")),
+    path("api/admin/", include("core.admin_urls")),
     path("api/support/", include("core.support_urls")),
     path("api/auth/", include("authentication.urls")),
     path("api/businesses/", include("businesses.urls")),

@@ -13,12 +13,12 @@
           <tr>
             <td style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); padding: 32px 28px; text-align: center;">
               <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">Crystal Gym</h1>
-              <p style="margin: 12px 0 0; font-size: 14px; color: #94a3b8;">New website enquiry</p>
+              <p style="margin: 12px 0 0; font-size: 14px; color: #94a3b8;">{% if is_service %}New service enquiry{% else %}New website enquiry{% endif %}</p>
             </td>
           </tr>
           <tr>
             <td style="padding: 28px 28px 8px;">
-              <p style="margin: 0 0 20px; font-size: 15px; color: #334155; line-height: 1.5;">Someone submitted the contact form on your home page. You can reply directly to their email (Reply-To is set).</p>
+              <p style="margin: 0 0 20px; font-size: 15px; color: #334155; line-height: 1.5;">{% if is_service %}Someone submitted the <strong>services</strong> form on your home page.{% else %}Someone submitted the contact form on your home page.{% endif %} You can reply directly to their email (Reply-To is set).</p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
                 <tr>
                   <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; width: 32%; vertical-align: top;">Name</td>
@@ -30,6 +30,18 @@
                     <a href="mailto:{{ email }}" style="color: #2563eb; text-decoration: none;">{{ email }}</a>
                   </td>
                 </tr>
+                {% if phone %}
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; vertical-align: top;">Phone</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #0f172a; vertical-align: top; font-weight: 600;">{{ phone }}</td>
+                </tr>
+                {% endif %}
+                {% if service_topic %}
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #64748b; vertical-align: top;">Service / topic</td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #0f172a; vertical-align: top;">{{ service_topic }}</td>
+                </tr>
+                {% endif %}
               </table>
             </td>
           </tr>
@@ -41,7 +53,7 @@
           </tr>
           <tr>
             <td style="padding: 0 28px 28px;">
-              <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">This email was generated automatically from the Crystal Gym website enquiry form.</p>
+              <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">This email was generated automatically from the Crystal Gym home page{% if is_service %} services{% endif %} form.</p>
             </td>
           </tr>
         </table>

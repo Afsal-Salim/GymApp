@@ -5,12 +5,14 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.authentication import TokenAuthentication
+from core.authentication import TokenAuthentication, token_auth_error_response
+from core.record_status import RECORD_STATUS_ACTIVE
 from core.email_notifications import notify_client_support_feedback, notify_site_enquiry
 from core.models import ClientSupportMessage, SiteEnquiry
 from core.serializers import (
     ClientSupportMessageCreateSerializer,
     ClientSupportMessageListSerializer,
+    ServiceEnquiryCreateSerializer,
     SiteEnquiryCreateSerializer,
 )
 
@@ -41,11 +43,44 @@ class SiteEnquiryCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        enquiry = SiteEnquiry.objects.create(**serializer.validated_data)
+        enquiry = serializer.save()
         notify_site_enquiry(
             name=enquiry.name,
             email=enquiry.email,
             message=enquiry.message,
+            enquiry_kind=enquiry.enquiry_kind,
+        )
+
+        return Response(
+            {"ok": True, "id": enquiry.id},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ServiceEnquiryCreateView(APIView):
+    """
+    POST /api/public/service-enquiries/
+
+    Public. Home page “services” enquiry: name, email, phone, message,
+    optional service_topic. Stored as SiteEnquiry with enquiry_kind=service.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        serializer = ServiceEnquiryCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        enquiry = serializer.save()
+        notify_site_enquiry(
+            name=enquiry.name,
+            email=enquiry.email,
+            message=enquiry.message,
+            phone=enquiry.phone,
+            service_topic=enquiry.service_topic,
+            enquiry_kind=enquiry.enquiry_kind,
         )
 
         return Response(
@@ -63,9 +98,12 @@ class ClientSupportFeedbackView(APIView):
     def get(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
-        qs = ClientSupportMessage.objects.filter(customer=customer)[:100]
+        qs = ClientSupportMessage.objects.filter(
+            customer=customer,
+            record_status=RECORD_STATUS_ACTIVE,
+        )[:100]
         return Response(
             {"results": ClientSupportMessageListSerializer(qs, many=True).data}
         )
@@ -73,7 +111,7 @@ class ClientSupportFeedbackView(APIView):
     def post(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
 
         serializer = ClientSupportMessageCreateSerializer(data=request.data)
         if not serializer.is_valid():

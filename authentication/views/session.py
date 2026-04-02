@@ -2,11 +2,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.authentication import TokenAuthentication
+from core.authentication import TokenAuthentication, token_auth_error_response
 from core.logging import app_logger
 
 from authentication.models import Customer
 from authentication.tokens import create_access_token, verify_token
+from core.record_status import RECORD_STATUS_ACTIVE
 
 
 class MeView(APIView):
@@ -19,7 +20,7 @@ class MeView(APIView):
     def get(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
-            return Response(err, status=status.HTTP_401_UNAUTHORIZED)
+            return token_auth_error_response(err)
         return Response(
             {
                 "email": customer.email,
@@ -61,6 +62,12 @@ class RefreshView(APIView):
             return Response(
                 {"detail": "Customer not found"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if customer.record_status != RECORD_STATUS_ACTIVE:
+            return Response(
+                {"detail": "Your account is not active."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         access = create_access_token(customer)

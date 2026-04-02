@@ -1,8 +1,10 @@
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 
 from core.pagination import paginated_response
+from core.record_status import RECORD_STATUS_ACTIVE
 
-from .models import Plan
+from .models import Feature, Plan
 from .serializers import PlanSerializer
 
 
@@ -13,5 +15,14 @@ class PlanListView(APIView):
     """
 
     def get(self, request):
-        queryset = Plan.objects.prefetch_related("features").order_by("price")
+        queryset = (
+            Plan.objects.filter(record_status=RECORD_STATUS_ACTIVE)
+            .prefetch_related(
+                Prefetch(
+                    "features",
+                    queryset=Feature.objects.filter(record_status=RECORD_STATUS_ACTIVE),
+                )
+            )
+            .order_by("price")
+        )
         return paginated_response(request, queryset, PlanSerializer)

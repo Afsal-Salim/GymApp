@@ -12,6 +12,7 @@ from authentication.serializers import (
 )
 from authentication.tokens import create_access_token, create_refresh_token
 from core.email_notifications import notify_new_potential_client
+from core.record_status import RECORD_STATUS_ACTIVE
 
 
 class SignupView(APIView):
@@ -138,6 +139,12 @@ class LoginView(APIView):
             return Response(
                 {"detail": "Invalid credentials"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if customer.record_status != RECORD_STATUS_ACTIVE:
+            return Response(
+                {"detail": "Your account is not active."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         access = create_access_token(customer)

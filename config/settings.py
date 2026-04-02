@@ -28,6 +28,10 @@ def _split_csv(key: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+# Dashboard API: Bearer token must be a Customer whose email is listed here (comma-separated).
+ADMIN_EMAILS = [e.strip().lower() for e in _split_csv("ADMIN")]
+
+
 # --- Security (required / env-only) ---
 SECRET_KEY = (os.getenv("DJANGO_SECRET_KEY") or "").strip()
 if not SECRET_KEY:
@@ -292,6 +296,9 @@ NEW_USER_NOTIFY_SUBJECT = (
 ).strip()
 SITE_ENQUIRY_EMAIL_SUBJECT = (
     os.getenv("SITE_ENQUIRY_EMAIL_SUBJECT") or "Website enquiry – Crystal Gym"
+).strip()
+SERVICE_ENQUIRY_EMAIL_SUBJECT = (
+    os.getenv("SERVICE_ENQUIRY_EMAIL_SUBJECT") or "Service enquiry – Crystal Gym"
 ).strip()
 
 CLIENT_SUPPORT_EMAIL_SUBJECT_PREFIX = (

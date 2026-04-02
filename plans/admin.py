@@ -5,7 +5,15 @@ from .models import Feature, Plan
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "price", "currency", "duration")
+    list_display = (
+        "name",
+        "price",
+        "first_activation_price",
+        "currency",
+        "duration",
+        "coming_soon",
+        "record_status",
+    )
 
 
 @admin.register(Feature)

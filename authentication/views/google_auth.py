@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.logging import app_logger
+from core.record_status import RECORD_STATUS_ACTIVE
 
 from authentication.models import Customer
 from authentication.serializers import CustomerSerializer
@@ -157,6 +158,12 @@ class GoogleSignInView(APIView):
             _google_auth_flow(last_step)
             customer = Customer.objects.filter(google_id=google_sub).first()
             if customer:
+                if customer.record_status != RECORD_STATUS_ACTIVE:
+                    _google_auth_flow("exit_403_inactive_google_user")
+                    return Response(
+                        {"error": "Your account is not active."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 last_step = "branch_existing_google_user_create_tokens"
                 _google_auth_flow(last_step, customer_id=customer.id)
                 access = create_access_token(customer)
@@ -188,6 +195,12 @@ class GoogleSignInView(APIView):
                             "error": "An account already exists with this email. Sign in with your password.",
                         },
                         status=status.HTTP_409_CONFLICT,
+                    )
+                if existing.record_status != RECORD_STATUS_ACTIVE:
+                    _google_auth_flow("exit_403_inactive_linked_google")
+                    return Response(
+                        {"error": "Your account is not active."},
+                        status=status.HTTP_403_FORBIDDEN,
                     )
                 last_step = "branch_link_google_to_existing"
                 _google_auth_flow(last_step)
