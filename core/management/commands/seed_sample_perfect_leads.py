@@ -24,7 +24,6 @@ SEED_FLAG = "seed_perfect_sample"
 
 # Align with model / typical forms
 NAME_MAX = 200
-PHONE_MAX = 50
 MSG_MAX = 5000
 
 
@@ -107,9 +106,9 @@ class Command(BaseCommand):
         name_min = "Z"
         name_mid = "Jordan Rivera-Smith"
         name_max = "N" * NAME_MAX
-        phone_min = "0"
-        phone_mid = "+91 9876543210"
-        phone_max = "+" + ("9" * (PHONE_MAX - 1))
+        phone_min = "1000000000"
+        phone_mid = "9876543210"
+        phone_max = "9999999999"
         msg_min = "OK"
         msg_mid = (
             "I would like to schedule a tour next week after 5pm on weekdays. "
@@ -332,7 +331,7 @@ class Command(BaseCommand):
                     {
                         "lead_type": CrystalLead.LEAD_JOIN_NOW,
                         "name": "Priya Nair",
-                        "phone": "+91 9988776655",
+                        "phone": "9988776655",
                         "email": "priya.nair.work@example.com",
                         "message": (
                             "Moving to the area next month. Want full access plus "

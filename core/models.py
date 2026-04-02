@@ -22,7 +22,12 @@ class SiteEnquiry(models.Model):
 
     name = models.CharField(max_length=200)
     email = models.EmailField()
-    phone = models.CharField(max_length=50, blank=True, default="")
+    phone = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="10-digit mobile for service enquiries.",
+    )
     service_topic = models.CharField(
         max_length=255,
         blank=True,

@@ -112,7 +112,7 @@ class Command(BaseCommand):
                         "owner": owner,
                         "name": f"Demo Gym {i:04d}",
                         "description": f"Seeded demo business #{i}.",
-                        "phone": f"+91 {9000000000 + (i % 99999999):08d}",
+                        "phone": f"{9000000000 + (i % 99999999):010d}",
                         "address": f"{100 + i} Seed Street, Demo City",
                         "record_status": RECORD_STATUS_ACTIVE,
                     },

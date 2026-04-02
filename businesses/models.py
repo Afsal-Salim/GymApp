@@ -52,7 +52,11 @@ class Business(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
-    phone = models.CharField(max_length=50, blank=True)
+    phone = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text="10-digit mobile number (no spaces or country code stored).",
+    )
     address = models.TextField(blank=True)
     location_map_url = models.URLField(max_length=2000, blank=True)
     website_theme = models.JSONField(default=dict, blank=True)

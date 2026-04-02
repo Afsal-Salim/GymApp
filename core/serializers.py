@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from core.models import ClientSupportMessage, SiteEnquiry
+from core.phone import normalize_phone_10
 
 
 class SiteEnquiryCreateSerializer(serializers.ModelSerializer):
@@ -35,12 +36,10 @@ class ServiceEnquiryCreateSerializer(serializers.ModelSerializer):
         return text
 
     def validate_phone(self, value: str) -> str:
-        text = (value or "").strip()
-        if len(text) < 5:
-            raise serializers.ValidationError(
-                "Enter a valid phone number (at least 5 characters)."
-            )
-        return text[:50]
+        try:
+            return normalize_phone_10(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e)) from e
 
     def validate_service_topic(self, value: str) -> str:
         return (value or "").strip()[:255]

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from core.phone import normalize_phone_10, normalize_phone_10_or_empty
 from core.record_status import RECORD_STATUS_CHOICES
 from subscriptions.models import Subscription
 
@@ -93,6 +94,12 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A business with this slug already exists.")
         return value
 
+    def validate_phone(self, value):
+        try:
+            return normalize_phone_10_or_empty(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e)) from e
+
 
 class BusinessUpdateSerializer(serializers.ModelSerializer):
     """Partial or full update of an owned business (PATCH)."""
@@ -117,6 +124,12 @@ class BusinessUpdateSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError("A business with this slug already exists.")
         return value
+
+    def validate_phone(self, value):
+        try:
+            return normalize_phone_10_or_empty(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e)) from e
 
     def validate_website_theme(self, value):
         if value is not None and not isinstance(value, dict):
@@ -218,10 +231,14 @@ class CrystalWebsiteSetupSerializer(serializers.Serializer):
                 if item_id == "phone":
                     val = str(it.get("value") or "").strip()
                     href = str(it.get("href") or "").strip()
-                    if val:
-                        phone = val[:50]
-                    elif href.lower().startswith("tel:"):
-                        phone = href[4:].strip()[:50]
+                    raw = val or (
+                        href[4:].strip() if href.lower().startswith("tel:") else ""
+                    )
+                    if raw:
+                        try:
+                            phone = normalize_phone_10(raw)
+                        except ValueError:
+                            phone = ""
                 elif item_id == "address":
                     val = str(it.get("value") or "").strip()
                     if val:

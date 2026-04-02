@@ -65,7 +65,7 @@ class Command(BaseCommand):
                     "owner": owner,
                     "name": name,
                     "description": desc,
-                    "phone": "+91 9876543210",
+                    "phone": "9876543210",
                     "address": "123 Main St, City",
                 },
             )

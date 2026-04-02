@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import TokenAuthentication, token_auth_error_response
+from core.phone import normalize_phone_10
 from core.pagination import paginated_response
 from core.record_status import RECORD_STATUS_ACTIVE
 
@@ -65,14 +66,31 @@ class CrystalLeadCreateView(APIView):
                 cc = 1
             quantity = max(1, min(cc, 1000))
 
+        payload = dict(data)
+        raw_phone = payload.get("phone")
+        if raw_phone is not None and str(raw_phone).strip():
+            try:
+                payload["phone"] = normalize_phone_10(raw_phone)
+            except ValueError:
+                return Response(
+                    {
+                        "detail": (
+                            "phone must be exactly 10 digits "
+                            "(optional +91 prefix or one leading 0)."
+                        ),
+                        "field": "phone",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         CrystalLead.objects.create(
             business=business,
             lead_type=lead_type,
-            payload=dict(data),
+            payload=payload,
             submitted_at_ms=parse_submitted_at_ms(data.get("submitted_at_ms")),
             quantity=quantity,
         )
-        send_crystal_lead_owner_email(business, lead_type, dict(data))
+        send_crystal_lead_owner_email(business, lead_type, payload)
         return Response({"ok": True}, status=status.HTTP_201_CREATED)
 
 
