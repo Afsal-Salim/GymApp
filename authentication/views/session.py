@@ -6,6 +6,7 @@ from core.authentication import TokenAuthentication, token_auth_error_response
 from core.logging import app_logger
 
 from authentication.models import Customer
+from authentication.serializers import CustomerSerializer
 from authentication.tokens import create_access_token, verify_token
 from core.record_status import RECORD_STATUS_ACTIVE
 
@@ -14,19 +15,14 @@ class MeView(APIView):
     """
     GET /api/auth/me/
 
-    Returns the authenticated customer's email and username (Bearer access token).
+    Returns the authenticated customer (same fields as login), including role (Bearer access token).
     """
 
     def get(self, request):
         customer, err = TokenAuthentication().authenticate(request)
         if err:
             return token_auth_error_response(err)
-        return Response(
-            {
-                "email": customer.email,
-                "username": customer.username,
-            }
-        )
+        return Response(CustomerSerializer(customer).data)
 
 
 class RefreshView(APIView):
@@ -72,4 +68,9 @@ class RefreshView(APIView):
 
         access = create_access_token(customer)
         app_logger.info("Access token refreshed", customer_id=customer.id)
-        return Response({"access": access})
+        return Response(
+            {
+                "access": access,
+                "customer": CustomerSerializer(customer).data,
+            }
+        )

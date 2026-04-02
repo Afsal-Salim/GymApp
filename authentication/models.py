@@ -11,6 +11,15 @@ from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_CHOICES
 
 
 class Customer(models.Model):
+    ROLE_ADMIN = 0
+    ROLE_CLIENT = 1
+    ROLE_CLIENT_CUSTOMER = 2
+    ROLE_CHOICES = [
+        (ROLE_ADMIN, "admin"),
+        (ROLE_CLIENT, "client"),
+        (ROLE_CLIENT_CUSTOMER, "client_customer"),
+    ]
+
     AUTH_PROVIDER_EMAIL = "email"
     AUTH_PROVIDER_GOOGLE = "google"
     AUTH_PROVIDER_CHOICES = [
@@ -33,6 +42,11 @@ class Customer(models.Model):
         max_length=16,
         choices=RECORD_STATUS_CHOICES,
         default=RECORD_STATUS_ACTIVE,
+        db_index=True,
+    )
+    role = models.PositiveSmallIntegerField(
+        choices=ROLE_CHOICES,
+        default=ROLE_CLIENT,
         db_index=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)

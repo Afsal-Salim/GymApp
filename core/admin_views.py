@@ -29,7 +29,7 @@ class _AdminMixin:
             return None, token_auth_error_response(err)
         if not is_admin_customer(customer):
             return None, Response(
-                {"detail": "Admin access only. Set ADMIN in .env to your login email."},
+                {"detail": "Admin access only. Your account must have role admin (0)."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         return customer, None

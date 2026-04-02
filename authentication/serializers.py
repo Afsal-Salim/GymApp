@@ -62,9 +62,11 @@ class CustomerSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "username",
+            "role",
             "user_content_policy_accepted",
             "privacy_policy_accepted",
             "created_at",
             "updated_at",
         )
+        read_only_fields = ("role",)
 

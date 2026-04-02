@@ -38,6 +38,7 @@ class AdminCustomerSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "auth_provider",
+            "role",
             "record_status",
             "created_at",
             "updated_at",
@@ -53,7 +54,7 @@ class AdminCustomerPatchSerializer(serializers.ModelSerializer):
 
 class AdminBusinessSerializer(serializers.ModelSerializer):
     owner_email = serializers.EmailField(source="owner.email", read_only=True)
-    owner_id = serializers.IntegerField(source="owner_id", read_only=True)
+    owner_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Business
@@ -79,7 +80,7 @@ class AdminBusinessPatchSerializer(serializers.ModelSerializer):
 class AdminClientSupportSerializer(serializers.ModelSerializer):
     customer_email = serializers.EmailField(source="customer.email", read_only=True)
     customer_username = serializers.CharField(source="customer.username", read_only=True)
-    customer_id = serializers.IntegerField(source="customer_id", read_only=True)
+    customer_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ClientSupportMessage
