@@ -1,5 +1,4 @@
 from decimal import Decimal
-from datetime import timedelta
 
 import razorpay
 from django.conf import settings
@@ -12,6 +11,7 @@ from django.utils import timezone
 
 from authentication.models import Customer
 from subscriptions.models import Subscription
+from subscriptions.utils import next_stacked_subscription_dates
 
 from .models import Payment
 from .serializers import (
@@ -226,8 +226,7 @@ class VerifyPaymentView(APIView):
 
         subscription = None
         if plan:
-            start = timezone.now().date()
-            end = start + timedelta(days=plan.duration)
+            start, end = next_stacked_subscription_dates(business, plan.duration)
             subscription = Subscription.objects.create(
                 business=business,
                 plan=plan,
