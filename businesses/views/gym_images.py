@@ -24,6 +24,8 @@ class GymImagesView(APIView):
     """
     GET  /api/businesses/<slug>/images/ — list uploads + slot usage
     POST /api/businesses/<slug>/images/ — upload (multipart)
+
+    Trial: max 5 images. Paid plans (Starter, Pro, …): no image count cap (still 1 MB / type rules).
     """
 
     parser_classes = (MultiPartParser, FormParser)
@@ -68,7 +70,7 @@ class GymImagesView(APIView):
             )
 
         limit = max_gym_images_for_business(business)
-        if limit <= 0:
+        if limit == 0:
             return Response(
                 {
                     "detail": "No active subscription. Subscribe to upload gym images.",
@@ -77,7 +79,7 @@ class GymImagesView(APIView):
             )
 
         used = count_active_gym_images(business)
-        if used >= limit:
+        if limit is not None and used >= limit:
             return Response(
                 {
                     "detail": f"Image limit reached ({limit} for your current plan).",
