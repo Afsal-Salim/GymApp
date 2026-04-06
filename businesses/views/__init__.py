@@ -26,6 +26,7 @@ from .crystal import (
     CrystalLeadOwnerListView,
 )
 from .website_setup import CrystalWebsiteSetupView
+from .gym_images import GymImagesView
 
 __all__ = [
     "WebsiteAnalyticsOverviewView",
@@ -45,4 +46,5 @@ __all__ = [
     "CrystalLeadOwnerDetailView",
     "CrystalLeadOwnerListView",
     "CrystalWebsiteSetupView",
+    "GymImagesView",
 ]

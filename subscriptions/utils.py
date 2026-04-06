@@ -20,11 +20,15 @@ def next_stacked_subscription_dates(business, duration_days: int) -> tuple[date,
     - If there is no prior row or the latest end date is **before today** (lapsed),
       the new period starts **today**.
 
-    ``end_date`` uses the same rule as payment verify: ``start + duration_days``
-    (matches existing ``Plan.duration`` semantics).
+    **Recharge during free trial:** if the stacking tip is the automatic trial row
+    (``payment_id="trial"``), the paid window is anchored to the trial's last day:
+    ``start = trial_end + 1 day`` and ``end = trial_end + duration_days`` (e.g. last
+    trial day + 28 days for a 28-day plan). Otherwise ``end = start + duration_days``.
 
     Only rows with ``record_status=active`` are considered when finding the chain tip.
     """
+    from subscriptions.trial_subscription import TRIAL_PAYMENT_ID
+
     today = timezone.now().date()
     latest_end = (
         business.subscriptions.filter(record_status=RECORD_STATUS_ACTIVE).aggregate(
@@ -34,8 +38,19 @@ def next_stacked_subscription_dates(business, duration_days: int) -> tuple[date,
 
     if latest_end is None or latest_end < today:
         start = today
-    else:
-        start = latest_end + timedelta(days=1)
+        end = start + timedelta(days=duration_days)
+        return start, end
 
-    end = start + timedelta(days=duration_days)
+    start = latest_end + timedelta(days=1)
+
+    trial_covers_tip = business.subscriptions.filter(
+        record_status=RECORD_STATUS_ACTIVE,
+        payment_id=TRIAL_PAYMENT_ID,
+        subscription_end_date=latest_end,
+    ).exists()
+
+    if trial_covers_tip:
+        end = latest_end + timedelta(days=duration_days)
+    else:
+        end = start + timedelta(days=duration_days)
     return start, end

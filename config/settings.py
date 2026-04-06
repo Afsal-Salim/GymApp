@@ -303,3 +303,12 @@ CLIENT_SUPPORT_EMAIL_SUBJECT_PREFIX = (
 
 
 GOOGLE_OAUTH_CLIENT_ID = (os.getenv("GOOGLE_OAUTH_CLIENT_ID") or "").strip()
+
+
+# --- S3 gym images (owner uploads; keys: {slug}/{uuid}.ext) ---
+AWS_ACCESS_KEY_ID = (os.getenv("AWS_ACCESS_KEY_ID") or "").strip()
+AWS_SECRET_ACCESS_KEY = (os.getenv("AWS_SECRET_ACCESS_KEY") or "").strip()
+AWS_S3_REGION_NAME = (os.getenv("AWS_S3_REGION_NAME") or "ap-south-1").strip()
+AWS_S3_GYM_IMAGES_BUCKET = (os.getenv("AWS_S3_GYM_IMAGES_BUCKET") or "").strip()
+# Optional: public base URL (e.g. CloudFront https://dxxxx.cloudfront.net). If empty, URL is built as https://{bucket}.s3.{region}.amazonaws.com/
+AWS_S3_GYM_IMAGES_URL_PREFIX = (os.getenv("AWS_S3_GYM_IMAGES_URL_PREFIX") or "").strip()

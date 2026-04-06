@@ -16,7 +16,7 @@ class PlanListView(APIView):
 
     def get(self, request):
         queryset = (
-            Plan.objects.filter(record_status=RECORD_STATUS_ACTIVE)
+            Plan.objects.filter(record_status=RECORD_STATUS_ACTIVE, internal_only=False)
             .prefetch_related(
                 Prefetch(
                     "features",

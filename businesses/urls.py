@@ -74,6 +74,11 @@ urlpatterns = [
         views.FirstRechargeEligibilityView.as_view(),
         name="business-first-recharge",
     ),
+    path(
+        "<slug:slug>/images/",
+        views.GymImagesView.as_view(),
+        name="business-gym-images",
+    ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(
         "<slug:slug>/active-subscription/",

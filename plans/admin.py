@@ -12,6 +12,7 @@ class PlanAdmin(admin.ModelAdmin):
         "currency",
         "duration",
         "coming_soon",
+        "internal_only",
         "record_status",
     )
 

@@ -19,6 +19,10 @@ class Plan(models.Model):
         default=False,
         help_text="When true, plan is listed but not available for purchase yet.",
     )
+    internal_only = models.BooleanField(
+        default=False,
+        help_text="When true, hidden from public plan list and not purchasable via payment APIs.",
+    )
     record_status = models.CharField(
         max_length=16,
         choices=RECORD_STATUS_CHOICES,

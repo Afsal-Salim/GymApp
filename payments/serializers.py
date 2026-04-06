@@ -3,7 +3,7 @@ from rest_framework import serializers
 from businesses.models import Business
 from core.record_status import RECORD_STATUS_ACTIVE
 from plans.models import Plan
-from subscriptions.models import Subscription
+from subscriptions.trial_subscription import business_has_non_trial_subscription
 
 from .models import Payment
 
@@ -26,6 +26,7 @@ class CreateOrderSerializer(serializers.Serializer):
         queryset=Plan.objects.filter(
             record_status=RECORD_STATUS_ACTIVE,
             coming_soon=False,
+            internal_only=False,
         ),
         required=False,
         allow_null=True,
@@ -60,7 +61,7 @@ class CreateOrderSerializer(serializers.Serializer):
             business = attrs["business_id"]
             if (
                 plan.first_activation_price is not None
-                and not Subscription.objects.filter(business=business).exists()
+                and not business_has_non_trial_subscription(business)
             ):
                 attrs["amount"] = plan.first_activation_price
             else:
@@ -86,6 +87,7 @@ class VerifyPaymentSerializer(serializers.Serializer):
         queryset=Plan.objects.filter(
             record_status=RECORD_STATUS_ACTIVE,
             coming_soon=False,
+            internal_only=False,
         ),
         required=False,
         allow_null=True,
