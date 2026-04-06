@@ -306,9 +306,33 @@ GOOGLE_OAUTH_CLIENT_ID = (os.getenv("GOOGLE_OAUTH_CLIENT_ID") or "").strip()
 
 
 # --- S3 gym images (owner uploads; keys: {slug}/{uuid}.ext) ---
-AWS_ACCESS_KEY_ID = (os.getenv("AWS_ACCESS_KEY_ID") or "").strip()
-AWS_SECRET_ACCESS_KEY = (os.getenv("AWS_SECRET_ACCESS_KEY") or "").strip()
+# Standard AWS names, or aliases S3_ACCESS_KEY / S3_SECRET_KEY (same values).
+AWS_ACCESS_KEY_ID = (
+    os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("S3_ACCESS_KEY") or ""
+).strip()
+AWS_SECRET_ACCESS_KEY = (
+    os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("S3_SECRET_KEY") or ""
+).strip()
 AWS_S3_REGION_NAME = (os.getenv("AWS_S3_REGION_NAME") or "ap-south-1").strip()
 AWS_S3_GYM_IMAGES_BUCKET = (os.getenv("AWS_S3_GYM_IMAGES_BUCKET") or "").strip()
+# Bucket's actual AWS region for public URLs (host = bucket.s3.<region>.amazonaws.com). Set when the bucket
+# is not in AWS_S3_REGION_NAME or s3:GetBucketLocation is unavailable — avoids PermanentRedirect in browsers.
+AWS_S3_GYM_IMAGES_BUCKET_REGION = (os.getenv("AWS_S3_GYM_IMAGES_BUCKET_REGION") or "").strip()
 # Optional: public base URL (e.g. CloudFront https://dxxxx.cloudfront.net). If empty, URL is built as https://{bucket}.s3.{region}.amazonaws.com/
 AWS_S3_GYM_IMAGES_URL_PREFIX = (os.getenv("AWS_S3_GYM_IMAGES_URL_PREFIX") or "").strip()
+# Comma-separated origins for S3 CORS (browser fetch/canvas). Empty = use "*" in configure_s3_gym_bucket.
+AWS_S3_GYM_IMAGES_CORS_ORIGINS = _split_csv("AWS_S3_GYM_IMAGES_CORS_ORIGINS")
+# When true, gym image S3 calls use boto3 default credential chain without requiring env keys (EC2 role, ~/.aws).
+# Do not enable on random laptops unless credentials exist — otherwise put_object may hang probing IMDS.
+GYM_IMAGES_USE_DEFAULT_AWS_CREDENTIALS = _env_bool(
+    "GYM_IMAGES_USE_DEFAULT_AWS_CREDENTIALS", "false"
+)
+# Private bucket: return time-limited presigned GET URLs from the images API instead of plain object URLs.
+# Default true: private buckets get working browser URLs. Set false if objects are public and you want stable, cacheable URLs.
+AWS_S3_GYM_IMAGES_USE_PRESIGNED_GET = _env_bool("AWS_S3_GYM_IMAGES_USE_PRESIGNED_GET", "true")
+# Presigned GET lifetime in seconds (default 1 hour). SigV4 URLs include X-Amz-Expires=<this value>.
+try:
+    _gym_presign_exp = int((os.getenv("AWS_S3_GYM_IMAGES_PRESIGNED_EXPIRES") or "3600").strip())
+except ValueError:
+    _gym_presign_exp = 3600
+AWS_S3_GYM_IMAGES_PRESIGNED_EXPIRES = max(60, min(_gym_presign_exp, 604800))

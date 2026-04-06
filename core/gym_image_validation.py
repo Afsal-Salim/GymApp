@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import io
-from typing import BinaryIO, Tuple
+import re
+from typing import Tuple
 
-from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
 # Limit decompression bomb (pixels); can override via Django settings.
@@ -89,3 +92,50 @@ def validate_gym_image_upload(
 
     ext, mime = FORMAT_MAP[fmt]
     return raw, ext, mime
+
+
+def try_gym_image_as_json_uploaded_file(data) -> SimpleUploadedFile | None:
+    """
+    If ``data`` includes base64 image fields, return a ``SimpleUploadedFile`` for validation.
+
+    Accepted keys (first match wins): ``file_base64``, ``image_base64``, ``image`` (string).
+    Supports ``data:image/png;base64,...`` URLs. Requires ``filename`` or ``name`` with extension.
+
+    Returns ``None`` if no JSON image field is present. Raises ``ValidationError`` if a field
+    is present but invalid.
+    """
+    if not isinstance(data, dict):
+        return None
+    b64 = data.get("file_base64") or data.get("image_base64") or data.get("image")
+    if b64 is None:
+        return None
+    if not isinstance(b64, str):
+        raise ValidationError("Image base64 field must be a string.")
+    s = b64.strip()
+    if not s:
+        raise ValidationError("Image base64 data is empty.")
+    if s.startswith("data:"):
+        m = re.match(r"^data:image/[^;]+;base64,(.+)$", s, re.IGNORECASE | re.DOTALL)
+        if not m:
+            raise ValidationError(
+                "Invalid data URL; expected data:image/<type>;base64,<payload>."
+            )
+        s = m.group(1).strip()
+    try:
+        raw = base64.b64decode(s, validate=False)
+    except Exception as e:
+        raise ValidationError("Invalid base64 encoding.") from e
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise ValidationError(f"Image must be at most {MAX_IMAGE_BYTES // (1024 * 1024)} MB.")
+    if len(raw) == 0:
+        raise ValidationError("Decoded image is empty.")
+    filename = (data.get("filename") or data.get("name") or "").strip()
+    if not filename or "." not in filename:
+        raise ValidationError(
+            "JSON upload requires 'filename' (or 'name') with an extension, e.g. photo.jpg."
+        )
+    return SimpleUploadedFile(
+        filename,
+        raw,
+        content_type="application/octet-stream",
+    )
