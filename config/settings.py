@@ -70,6 +70,18 @@ INSTALLED_APPS = [
     "corsheaders",
 ]
 
+# API routes use Bearer tokens via core.authentication.TokenAuthentication in views, not DRF session auth.
+# Disabling DRF's default SessionAuthentication / BasicAuthentication avoids extra session access per request.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+}
+
+# Session backend: "db" (default) or "signed_cookies" — latter skips django_session read/write on each request
+# (helpful when POSTGRES_HOST is remote; CSRF still stores token in the signed session cookie).
+_session_engine = (os.getenv("DJANGO_SESSION_ENGINE") or "db").strip().lower()
+if _session_engine in ("signed_cookies", "signed", "cookie"):
+    SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

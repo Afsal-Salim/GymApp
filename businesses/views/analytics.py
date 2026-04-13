@@ -8,6 +8,7 @@ from core.record_status import RECORD_STATUS_ACTIVE
 from businesses.crystal_leads import (
     resolve_analytics_preset,
     website_analytics_for_business,
+    websites_analytics_overview,
 )
 from businesses.models import Business
 from businesses.views.owned_business import get_owned_business
@@ -77,9 +78,8 @@ class WebsiteAnalyticsOverviewView(APIView):
         return Response(
             {
                 "range_applied": preset,
-                "websites": [
-                    website_analytics_for_business(b, range_preset=preset)
-                    for b in businesses
-                ],
+                "websites": websites_analytics_overview(
+                    businesses, range_preset=preset
+                ),
             }
         )

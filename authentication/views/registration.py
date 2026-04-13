@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -25,6 +26,9 @@ class SignupView(APIView):
     - Hashes and stores password on the Customer model.
     - Returns customer data plus access and refresh tokens.
     """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
@@ -117,6 +121,9 @@ class LoginView(APIView):
     - On success returns customer data plus fresh access and refresh tokens.
     """
 
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -126,7 +133,18 @@ class LoginView(APIView):
         password = serializer.validated_data["password"]
 
         try:
-            customer = Customer.objects.get(email=email)
+            customer = Customer.objects.only(
+                "id",
+                "email",
+                "password",
+                "username",
+                "role",
+                "user_content_policy_accepted",
+                "privacy_policy_accepted",
+                "record_status",
+                "created_at",
+                "updated_at",
+            ).get(email=email)
         except Customer.DoesNotExist:
             app_logger.warning("Login failed: unknown email", email=email)
             return Response(
