@@ -53,7 +53,9 @@ class TokenAuthentication:
 
         customer_id = payload.get("sub")
         try:
-            customer = Customer.objects.get(id=customer_id)
+            customer = Customer.objects.only(
+                "id", "email", "username", "record_status"
+            ).get(id=customer_id)
         except Customer.DoesNotExist:
             return None, {"detail": "Customer not found"}
 
@@ -63,7 +65,7 @@ class TokenAuthentication:
                 "_http_status": 403,
             }
 
-        app_logger.info(
+        app_logger.debug(
             "Bearer token authenticated",
             request_id=getattr(request, "_req_log_id", None),
             customer_id=customer.id,

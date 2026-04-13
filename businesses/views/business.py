@@ -9,6 +9,7 @@ from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_INACTIVE
 from businesses.models import Business
 from businesses.serializers import (
     BusinessCreateSerializer,
+    BusinessDetailCoreSerializer,
     BusinessPublicSerializer,
     BusinessRecordStatusSerializer,
     BusinessSerializer,
@@ -42,6 +43,7 @@ class BusinessListCreateView(APIView):
 
         queryset = (
             Business.objects.filter(owner=customer, record_status=RECORD_STATUS_ACTIVE)
+            .select_related("owner")
             .prefetch_related("subscriptions__plan")
             .order_by("-created_at")
         )
@@ -67,6 +69,8 @@ class BusinessDetailView(APIView):
     """
     GET /api/businesses/<slug>/
         Get a single business by slug. Only allowed if owned by the authenticated customer.
+        Optional: ``?lite=1`` omits ``website_theme`` / ``website_content`` and does not
+        load those columns (faster for dashboards; fetch full detail for the site builder).
     PATCH /api/businesses/<slug>/
         Partially update fields on an owned business (same slug in URL as before update,
         or use new slug after changing it — clients should follow redirects / refetch).
@@ -77,15 +81,21 @@ class BusinessDetailView(APIView):
         if err:
             return token_auth_error_response(err)
 
-        business, denied = get_owned_business(customer, slug)
+        lite = request.GET.get("lite", "").lower() in ("1", "true", "yes")
+        business, denied = get_owned_business(
+            customer,
+            slug,
+            with_serializer_relations=True,
+            defer_website_payload=lite,
+        )
         if denied:
             return denied
 
-        business = (
-            Business.objects.prefetch_related("subscriptions__plan")
-            .get(pk=business.pk)
+        serializer = (
+            BusinessDetailCoreSerializer(business)
+            if lite
+            else BusinessSerializer(business)
         )
-        serializer = BusinessSerializer(business)
         return Response(serializer.data)
 
     def patch(self, request, slug):
@@ -93,14 +103,11 @@ class BusinessDetailView(APIView):
         if err:
             return token_auth_error_response(err)
 
-        business, denied = get_owned_business(customer, slug)
+        business, denied = get_owned_business(
+            customer, slug, with_serializer_relations=True
+        )
         if denied:
             return denied
-
-        business = (
-            Business.objects.prefetch_related("subscriptions__plan")
-            .get(pk=business.pk)
-        )
 
         serializer = BusinessUpdateSerializer(
             business, data=request.data, partial=True
@@ -109,10 +116,11 @@ class BusinessDetailView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         serializer.save()
-        updated = (
-            Business.objects.prefetch_related("subscriptions__plan")
-            .get(pk=serializer.instance.pk)
+        updated, denied = get_owned_business(
+            customer, serializer.instance.slug, with_serializer_relations=True
         )
+        if denied:
+            return denied
         return Response(BusinessSerializer(updated).data, status=status.HTTP_200_OK)
 
 

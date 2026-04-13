@@ -50,7 +50,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         }
         if query:
             ctx["query"] = query
-        app_logger.info("API request received", **ctx)
+        app_logger.debug("API request received", **ctx)
         app_logger.debug(
             "API request meta",
             request_id=request._req_log_id,
@@ -75,7 +75,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         )
         rm = getattr(request, "resolver_match", None)
         url_name = rm.url_name if rm else None
-        app_logger.info(
+        app_logger.debug(
             "API dispatch",
             request_id=_request_id(request),
             view=view_name,

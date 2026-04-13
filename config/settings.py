@@ -126,6 +126,14 @@ if _db_backend in ("postgres", "postgresql"):
     }
     if _pg_options:
         _default_db["OPTIONS"] = _pg_options
+    # Persistent connections avoid a full TCP/TLS handshake on every request (often 0.5–4s on remote RDS).
+    # Set DJANGO_DB_CONN_MAX_AGE=0 to restore per-request connect. SQLite keeps default (short-lived) behavior below.
+    _conn_max_raw = (os.getenv("DJANGO_DB_CONN_MAX_AGE") or "600").strip()
+    try:
+        _conn_max_age = int(_conn_max_raw)
+    except ValueError:
+        _conn_max_age = 600
+    _default_db["CONN_MAX_AGE"] = max(0, _conn_max_age)
     DATABASES = {"default": _default_db}
 else:
     _sqlite_name = (os.getenv("DJANGO_SQLITE_NAME") or "db.sqlite3").strip()

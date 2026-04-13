@@ -59,6 +59,30 @@ class BusinessSerializer(serializers.ModelSerializer):
         return obj.owner.username if obj.owner_id else None
 
 
+class BusinessDetailCoreSerializer(BusinessSerializer):
+    """
+    Same as ``BusinessSerializer`` but without Crystal builder JSON (large columns).
+    Pair with ``get_owned_business(..., defer_website_payload=True)`` on GET.
+    """
+
+    class Meta(BusinessSerializer.Meta):
+        fields = (
+            "id",
+            "owner",
+            "owner_email",
+            "owner_username",
+            "name",
+            "slug",
+            "description",
+            "phone",
+            "address",
+            "location_map_url",
+            "subscriptions",
+            "created_at",
+            "updated_at",
+        )
+
+
 class BusinessPublicSerializer(serializers.ModelSerializer):
     """
     Public business profile (no owner identifiers). For gym pages / shareable links by slug.
