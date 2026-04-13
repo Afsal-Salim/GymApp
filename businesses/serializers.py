@@ -83,6 +83,24 @@ class BusinessDetailCoreSerializer(BusinessSerializer):
         )
 
 
+class BusinessListSerializer(BusinessDetailCoreSerializer):
+    """
+    Owner paginated list: same as ``BusinessDetailCoreSerializer`` plus ``logo_url``
+    (from ``website_content.logo.src`` via DB annotation — no full ``website_content`` load).
+    """
+
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta(BusinessDetailCoreSerializer.Meta):
+        fields = (*BusinessDetailCoreSerializer.Meta.fields, "logo_url")
+
+    def get_logo_url(self, obj) -> str:
+        raw = getattr(obj, "_list_logo_url", None)
+        if raw is None:
+            return ""
+        return str(raw).strip()
+
+
 class BusinessPublicSerializer(serializers.ModelSerializer):
     """
     Public business profile (no owner identifiers). For gym pages / shareable links by slug.

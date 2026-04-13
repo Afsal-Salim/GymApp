@@ -1,3 +1,5 @@
+from django.db.models import Prefetch, TextField
+from django.db.models.fields.json import KeyTextTransform, KeyTransform
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,12 +12,14 @@ from businesses.models import Business
 from businesses.serializers import (
     BusinessCreateSerializer,
     BusinessDetailCoreSerializer,
+    BusinessListSerializer,
     BusinessPublicSerializer,
     BusinessRecordStatusSerializer,
     BusinessSerializer,
     BusinessUpdateSerializer,
 )
 from businesses.subscription_helpers import (
+    get_active_public_subscription_for_slug,
     get_active_subscription_for_business,
     public_active_subscription_payload,
     subscription_plan_tier,
@@ -26,6 +30,33 @@ from plans.models import Plan
 from subscriptions.models import Subscription
 from subscriptions.trial_subscription import business_has_non_trial_subscription
 from subscriptions.serializers import CurrentSubscriptionSerializer
+
+
+def _owned_business_list_queryset(customer):
+    """
+    List queryset: avoid loading huge ``website_content`` / ``website_theme`` JSON into Python,
+    while still exposing ``logo_url`` for the dashboard (JSON path in SQL).
+    """
+    logo_src = KeyTextTransform(
+        "src",
+        KeyTransform("logo", "website_content"),
+        output_field=TextField(),
+    )
+    return (
+        Business.objects.filter(owner=customer, record_status=RECORD_STATUS_ACTIVE)
+        .select_related("owner")
+        .annotate(_list_logo_url=logo_src)
+        .defer("website_content", "website_theme")
+        .prefetch_related(
+            Prefetch(
+                "subscriptions",
+                queryset=Subscription.objects.select_related("plan").order_by(
+                    "-subscription_end_date"
+                ),
+            )
+        )
+        .order_by("-created_at")
+    )
 
 
 class BusinessListCreateView(APIView):
@@ -41,13 +72,8 @@ class BusinessListCreateView(APIView):
         if err:
             return token_auth_error_response(err)
 
-        queryset = (
-            Business.objects.filter(owner=customer, record_status=RECORD_STATUS_ACTIVE)
-            .select_related("owner")
-            .prefetch_related("subscriptions__plan")
-            .order_by("-created_at")
-        )
-        return paginated_response(request, queryset, BusinessSerializer)
+        queryset = _owned_business_list_queryset(customer)
+        return paginated_response(request, queryset, BusinessListSerializer)
 
     def post(self, request):
         customer, err = TokenAuthentication().authenticate(request)
@@ -288,9 +314,8 @@ class BusinessActiveSubscriptionView(APIView):
     """
 
     def get(self, request, slug):
-        try:
-            business = active_businesses().get(slug=slug)
-        except Business.DoesNotExist:
+        active, not_found = get_active_public_subscription_for_slug(slug)
+        if not_found:
             return Response(
                 {
                     "detail": "Not found.",
@@ -303,8 +328,6 @@ class BusinessActiveSubscriptionView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        active = get_active_subscription_for_business(business)
 
         if not active:
             return Response(

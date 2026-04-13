@@ -1,8 +1,10 @@
 """Shared helpers for active (non-expired) business subscriptions."""
 
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from core.record_status import RECORD_STATUS_ACTIVE
+from plans.models import Feature
 
 
 def subscription_plan_tier(plan) -> str:
@@ -30,11 +32,7 @@ def public_active_subscription_payload(subscription) -> dict:
     """
     plan = subscription.plan
     tier = subscription_plan_tier(plan)
-    features = [
-        {"id": f.id, "name": f.name}
-        for f in plan.features.all()
-        if f.record_status == RECORD_STATUS_ACTIVE
-    ]
+    features = [{"id": f.id, "name": f.name} for f in plan.features.all()]
     return {
         "id": subscription.id,
         "plan_name": plan.name,
@@ -56,7 +54,7 @@ def public_active_subscription_payload(subscription) -> dict:
 def get_active_subscription_for_business(business):
     """
     Latest **active** subscription row whose end date is today or later.
-    Prefetches plan + features for serializers.
+    Prefetches plan + active features in one go (avoids N+1 and loads fewer rows).
     """
     today = timezone.now().date()
     return (
@@ -65,7 +63,57 @@ def get_active_subscription_for_business(business):
             record_status=RECORD_STATUS_ACTIVE,
         )
         .select_related("plan")
-        .prefetch_related("plan__features")
+        .prefetch_related(
+            Prefetch(
+                "plan__features",
+                queryset=Feature.objects.filter(
+                    record_status=RECORD_STATUS_ACTIVE
+                ).order_by("id"),
+            )
+        )
         .order_by("-subscription_end_date")
         .first()
     )
+
+
+def get_active_public_subscription_for_slug(slug: str):
+    """
+    Resolve active subscription for the **public** ``active-subscription`` API with minimal queries.
+
+    Returns ``(subscription | None, not_found)``:
+    - ``not_found`` is True when no **active** business exists for ``slug`` (HTTP 404).
+    - Otherwise ``not_found`` is False; ``subscription`` is None when the gym exists but has no
+      qualifying active subscription (HTTP 200 empty body).
+
+    When ``subscription`` is not None, ``plan`` and active ``plan.features`` are prefetched.
+    """
+    from businesses.models import Business
+    from subscriptions.models import Subscription
+
+    today = timezone.now().date()
+    sub = (
+        Subscription.objects.filter(
+            business__slug=slug,
+            business__record_status=RECORD_STATUS_ACTIVE,
+            subscription_end_date__gte=today,
+            record_status=RECORD_STATUS_ACTIVE,
+        )
+        .select_related("plan", "business")
+        .prefetch_related(
+            Prefetch(
+                "plan__features",
+                queryset=Feature.objects.filter(
+                    record_status=RECORD_STATUS_ACTIVE
+                ).order_by("id"),
+            )
+        )
+        .order_by("-subscription_end_date")
+        .first()
+    )
+    if sub is not None:
+        return sub, False
+    if not Business.objects.filter(
+        slug=slug, record_status=RECORD_STATUS_ACTIVE
+    ).exists():
+        return None, True
+    return None, False

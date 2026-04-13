@@ -24,3 +24,11 @@ class Subscription(models.Model):
     def __str__(self) -> str:
         return f"{self.business.name} - {self.plan.name}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["business", "record_status", "subscription_end_date"],
+                name="sub_biz_status_end_idx",
+            ),
+        ]
+
