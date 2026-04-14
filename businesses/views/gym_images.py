@@ -24,6 +24,7 @@ from core.record_status import RECORD_STATUS_ACTIVE
 from core.s3_gym_images import (
     delete_gym_image_from_s3,
     gym_image_browser_url,
+    gym_image_browser_urls_for_keys,
     gym_s3_configured,
     gym_s3_configuration_missing,
     upload_gym_image_to_s3,
@@ -56,10 +57,21 @@ class GymImagesView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        qs = Asset.objects.filter(business=business, record_status=RECORD_STATUS_ACTIVE).order_by(
-            "-uploaded_at"
+        qs = list(
+            Asset.objects.filter(
+                business=business, record_status=RECORD_STATUS_ACTIVE
+            ).order_by("-uploaded_at")
         )
-        return Response({"images": AssetSerializer(qs, many=True).data})
+        url_by_key = gym_image_browser_urls_for_keys(a.s3_key for a in qs if a.s3_key)
+        return Response(
+            {
+                "images": AssetSerializer(
+                    qs,
+                    many=True,
+                    context={"gym_image_browser_url_by_s3_key": url_by_key},
+                ).data
+            }
+        )
 
     def post(self, request, slug):
         customer, err = TokenAuthentication().authenticate(request)

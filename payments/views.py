@@ -7,9 +7,11 @@ from django.template.loader import render_to_string
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.utils import timezone
 
 from authentication.models import Customer
+from businesses.models import Business
+from core.mail_background import run_in_background
+from plans.models import Plan
 from subscriptions.models import Subscription
 from subscriptions.utils import next_stacked_subscription_dates
 
@@ -235,14 +237,29 @@ class VerifyPaymentView(APIView):
                 subscription_end_date=end,
             )
 
-        # Send payment confirmation email to the customer
-        _send_payment_success_email(
-            customer=customer,
-            business=business,
-            payment=payment,
-            subscription=subscription,
-            plan=plan,
-        )
+        c_pk, b_pk, pay_pk = customer.pk, business.pk, payment.pk
+        sub_pk = subscription.pk if subscription else None
+        plan_pk = plan.pk if plan else None
+
+        def _payment_email() -> None:
+            c = Customer.objects.get(pk=c_pk)
+            b = Business.objects.get(pk=b_pk)
+            pay = Payment.objects.get(pk=pay_pk)
+            sub = (
+                Subscription.objects.select_related("plan").get(pk=sub_pk)
+                if sub_pk
+                else None
+            )
+            pl = Plan.objects.get(pk=plan_pk) if plan_pk else None
+            _send_payment_success_email(
+                customer=c,
+                business=b,
+                payment=pay,
+                subscription=sub,
+                plan=pl,
+            )
+
+        run_in_background(_payment_email, thread_name="payment_success_email")
 
         return Response(
             {

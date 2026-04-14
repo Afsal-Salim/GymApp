@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterable
 from typing import Tuple
 
 import boto3
@@ -90,6 +91,53 @@ def gym_image_browser_url(key: str) -> str:
     except (ClientError, BotoCoreError, ValueError, TypeError) as e:
         app_logger.warning("gym_image presigned URL failed; using plain URL", error=str(e))
         return public_url_for_gym_s3_key(k)
+
+
+def gym_image_browser_urls_for_keys(keys: Iterable[str]) -> dict[str, str]:
+    """
+    Resolve browser URLs for many S3 keys with one region lookup and one boto client
+    (presigned mode still signs each key, but avoids per-key client construction).
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for raw in keys:
+        k = (raw or "").strip()
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        unique.append(k)
+
+    out: dict[str, str] = {}
+    if not unique:
+        return out
+
+    bucket = (getattr(settings, "AWS_S3_GYM_IMAGES_BUCKET", "") or "").strip()
+    if not bucket:
+        return out
+
+    use_presign = bool(getattr(settings, "AWS_S3_GYM_IMAGES_USE_PRESIGNED_GET", True))
+    if not use_presign or not gym_s3_configured():
+        for k in unique:
+            out[k] = public_url_for_gym_s3_key(k)
+        return out
+
+    expires = int(getattr(settings, "AWS_S3_GYM_IMAGES_PRESIGNED_EXPIRES", 3600))
+    reg = region_for_gym_image_urls()
+    client = _s3_client(region_name=reg)
+    for k in unique:
+        try:
+            out[k] = client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": k},
+                ExpiresIn=expires,
+            )
+        except (ClientError, BotoCoreError, ValueError, TypeError) as e:
+            app_logger.warning(
+                "gym_image batch presign failed for key; using plain URL",
+                error=str(e),
+            )
+            out[k] = public_url_for_gym_s3_key(k)
+    return out
 
 
 def _sanitize_slug_for_s3_key(slug: str) -> str:

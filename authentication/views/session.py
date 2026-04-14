@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -32,6 +33,9 @@ class RefreshView(APIView):
     Uses a valid refresh token to issue a new access token.
     """
 
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
     def post(self, request):
         token = request.data.get("refresh")
         if not token:
@@ -48,9 +52,33 @@ class RefreshView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        customer_id = payload.get("sub")
+        raw_sub = payload.get("sub")
+        if raw_sub is None:
+            return Response(
+                {"detail": "Invalid or expired refresh token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            customer = Customer.objects.get(id=customer_id)
+            customer_id = int(raw_sub)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Invalid or expired refresh token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # No password column: refresh never checks credentials; smaller row read.
+            customer = Customer.objects.only(
+                "id",
+                "email",
+                "username",
+                "role",
+                "user_content_policy_accepted",
+                "privacy_policy_accepted",
+                "record_status",
+                "created_at",
+                "updated_at",
+            ).get(pk=customer_id)
         except Customer.DoesNotExist:
             app_logger.error(
                 "Refresh token refers to missing customer", customer_id=customer_id
@@ -67,7 +95,7 @@ class RefreshView(APIView):
             )
 
         access = create_access_token(customer)
-        app_logger.info("Access token refreshed", customer_id=customer.id)
+        app_logger.debug("Access token refreshed", customer_id=customer.id)
         return Response(
             {
                 "access": access,

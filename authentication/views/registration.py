@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.logging import app_logger
+from core.mail_background import run_in_background
 
 from authentication.models import Customer, EmailOTP
 from authentication.serializers import (
@@ -86,11 +87,14 @@ class SignupView(APIView):
         customer.set_password(password)
         customer.save()
 
-        notify_new_potential_client(
-            email=customer.email,
-            username=customer.username,
-            customer_id=customer.id,
-            source="email_signup",
+        run_in_background(
+            lambda: notify_new_potential_client(
+                email=customer.email,
+                username=customer.username,
+                customer_id=customer.id,
+                source="email_signup",
+            ),
+            thread_name="new_user_notify_email",
         )
 
         access = create_access_token(customer)

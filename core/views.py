@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from core.authentication import TokenAuthentication, token_auth_error_response
 from core.record_status import RECORD_STATUS_ACTIVE
 from core.email_notifications import notify_client_support_feedback, notify_site_enquiry
+from core.mail_background import run_in_background
 from core.models import ClientSupportMessage, SiteEnquiry
 from core.serializers import (
     ClientSupportMessageCreateSerializer,
@@ -44,11 +45,14 @@ class SiteEnquiryCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         enquiry = serializer.save()
-        notify_site_enquiry(
-            name=enquiry.name,
-            email=enquiry.email,
-            message=enquiry.message,
-            enquiry_kind=enquiry.enquiry_kind,
+        run_in_background(
+            lambda: notify_site_enquiry(
+                name=enquiry.name,
+                email=enquiry.email,
+                message=enquiry.message,
+                enquiry_kind=enquiry.enquiry_kind,
+            ),
+            thread_name="site_enquiry_email",
         )
 
         return Response(
@@ -74,13 +78,16 @@ class ServiceEnquiryCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         enquiry = serializer.save()
-        notify_site_enquiry(
-            name=enquiry.name,
-            email=enquiry.email,
-            message=enquiry.message,
-            phone=enquiry.phone,
-            service_topic=enquiry.service_topic,
-            enquiry_kind=enquiry.enquiry_kind,
+        run_in_background(
+            lambda: notify_site_enquiry(
+                name=enquiry.name,
+                email=enquiry.email,
+                message=enquiry.message,
+                phone=enquiry.phone,
+                service_topic=enquiry.service_topic,
+                enquiry_kind=enquiry.enquiry_kind,
+            ),
+            thread_name="service_enquiry_email",
         )
 
         return Response(
@@ -121,14 +128,17 @@ class ClientSupportFeedbackView(APIView):
             customer=customer,
             **serializer.validated_data,
         )
-        notify_client_support_feedback(
-            customer_email=customer.email,
-            customer_username=customer.username,
-            customer_id=customer.id,
-            kind=row.kind,
-            subject=row.subject,
-            message=row.message,
-            message_id=row.id,
+        run_in_background(
+            lambda: notify_client_support_feedback(
+                customer_email=customer.email,
+                customer_username=customer.username,
+                customer_id=customer.id,
+                kind=row.kind,
+                subject=row.subject,
+                message=row.message,
+                message_id=row.id,
+            ),
+            thread_name="client_support_email",
         )
         return Response(
             ClientSupportMessageListSerializer(row).data,

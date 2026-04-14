@@ -1,11 +1,12 @@
 from django.conf import settings
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.logging import app_logger
+from core.mail_background import send_mail_in_background
 
 from authentication.models import EmailOTP
 from authentication.utils import generate_otp
@@ -19,9 +20,12 @@ class SendOTPView(APIView):
     - Validates that email is provided.
     - Generates a 6-digit OTP.
     - Stores OTP and a unique token in EmailOTP model.
-    - Sends OTP to the user's email.
+    - Sends OTP via SMTP in a background thread (response is not blocked on mail).
     - Returns a token used later for OTP verification.
     """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email")
@@ -50,20 +54,24 @@ class SendOTPView(APIView):
             "authentication/email_otp.html",
             {"otp": otp, "expire_minutes": expire_minutes, "otp_purpose": "signup"},
         )
-        send_mail(
+
+        def _log_sent() -> None:
+            app_logger.info(
+                "OTP sent to email",
+                email=email,
+                otp_id=otp_obj.id,
+                token=str(otp_obj.token),
+            )
+
+        send_mail_in_background(
+            thread_name="signup_otp_email",
+            on_sent=_log_sent,
             subject=subject,
             message=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[email],
             fail_silently=False,
             html_message=html_message,
-        )
-
-        app_logger.info(
-            "OTP sent to email",
-            email=email,
-            otp_id=otp_obj.id,
-            token=str(otp_obj.token),
         )
 
         return Response(
@@ -85,6 +93,9 @@ class VerifyOTPView(APIView):
     - Marks the OTP as verified.
     - Allows the user to proceed with account creation.
     """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def post(self, request):
         token = request.data.get("token")

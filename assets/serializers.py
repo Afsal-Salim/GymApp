@@ -27,6 +27,11 @@ class AssetSerializer(serializers.ModelSerializer):
         key = (obj.s3_key or "").strip()
         bucket = (getattr(settings, "AWS_S3_GYM_IMAGES_BUCKET", "") or "").strip()
         if key and bucket:
+            by_key = self.context.get("gym_image_browser_url_by_s3_key")
+            if isinstance(by_key, dict):
+                cached = by_key.get(key)
+                if cached:
+                    return cached
             url = gym_image_browser_url(key)
             if url:
                 return url

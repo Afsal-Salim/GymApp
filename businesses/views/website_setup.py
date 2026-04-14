@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -6,6 +7,7 @@ from core.authentication import TokenAuthentication, token_auth_error_response
 
 from businesses.models import Business
 from businesses.serializers import BusinessSerializer, CrystalWebsiteSetupSerializer
+from subscriptions.models import Subscription
 
 
 class CrystalWebsiteSetupView(APIView):
@@ -40,8 +42,17 @@ class CrystalWebsiteSetupView(APIView):
             website_theme=serializer.validated_data["theme"],
             website_content=serializer.validated_data["content"],
         )
-        business = Business.objects.prefetch_related("subscriptions__plan").get(
-            pk=business.pk
+        business = (
+            Business.objects.select_related("owner")
+            .prefetch_related(
+                Prefetch(
+                    "subscriptions",
+                    queryset=Subscription.objects.select_related("plan").order_by(
+                        "-subscription_end_date"
+                    ),
+                )
+            )
+            .get(pk=business.pk)
         )
 
         return Response(

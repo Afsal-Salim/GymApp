@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.authentication import TokenAuthentication, token_auth_error_response
+from core.mail_background import run_in_background
 from core.phone import normalize_phone_10
 from core.pagination import paginated_response
 from core.record_status import RECORD_STATUS_ACTIVE
@@ -90,7 +91,14 @@ class CrystalLeadCreateView(APIView):
             submitted_at_ms=parse_submitted_at_ms(data.get("submitted_at_ms")),
             quantity=quantity,
         )
-        send_crystal_lead_owner_email(business, lead_type, payload)
+
+        business_id = business.id
+
+        def _owner_email() -> None:
+            b = Business.objects.select_related("owner").get(pk=business_id)
+            send_crystal_lead_owner_email(b, lead_type, payload)
+
+        run_in_background(_owner_email, thread_name="crystal_lead_owner_email")
         return Response({"ok": True}, status=status.HTTP_201_CREATED)
 
 

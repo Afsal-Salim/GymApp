@@ -85,8 +85,20 @@ class BusinessListCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         business = serializer.save(owner=customer)
+        refreshed = (
+            Business.objects.select_related("owner")
+            .prefetch_related(
+                Prefetch(
+                    "subscriptions",
+                    queryset=Subscription.objects.select_related("plan").order_by(
+                        "-subscription_end_date"
+                    ),
+                )
+            )
+            .get(pk=business.pk)
+        )
         return Response(
-            BusinessSerializer(business).data,
+            BusinessSerializer(refreshed).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -214,7 +226,8 @@ class FirstRechargeEligibilityView(APIView):
             return denied
 
         has_any_subscription = Subscription.objects.filter(business=business).exists()
-        is_first = not business_has_non_trial_subscription(business)
+        has_paid_subscription = business_has_non_trial_subscription(business)
+        is_first = not has_paid_subscription
 
         starter = (
             Plan.objects.filter(
@@ -228,7 +241,7 @@ class FirstRechargeEligibilityView(APIView):
             "slug": business.slug,
             "is_first_recharge": is_first,
             "has_had_subscription": has_any_subscription,
-            "has_paid_subscription": business_has_non_trial_subscription(business),
+            "has_paid_subscription": has_paid_subscription,
         }
 
         if starter:

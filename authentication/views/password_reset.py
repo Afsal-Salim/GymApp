@@ -1,13 +1,14 @@
 import re
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.logging import app_logger
+from core.mail_background import send_mail_in_background
 
 from authentication.models import Customer, EmailOTP
 from authentication.utils import generate_otp
@@ -21,6 +22,9 @@ class ForgotPasswordView(APIView):
     - If the account exists, creates a password_reset OTP, sends email, returns token.
     - Always returns a generic message; token only present when email was sent.
     """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def post(self, request):
         email = (request.data.get("email") or "").strip()
@@ -56,18 +60,23 @@ class ForgotPasswordView(APIView):
             "authentication/email_otp.html",
             {"otp": otp, "expire_minutes": expire_minutes, "otp_purpose": "password_reset"},
         )
-        send_mail(
+
+        def _log_sent() -> None:
+            app_logger.info(
+                "Password reset OTP sent",
+                email=email,
+                otp_id=otp_obj.id,
+            )
+
+        send_mail_in_background(
+            thread_name="password_reset_otp_email",
+            on_sent=_log_sent,
             subject=subject,
             message=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[customer.email],
             fail_silently=False,
             html_message=html_message,
-        )
-        app_logger.info(
-            "Password reset OTP sent",
-            email=email,
-            otp_id=otp_obj.id,
         )
         return Response(
             {

@@ -13,6 +13,7 @@ from authentication.models import Customer
 from authentication.serializers import CustomerSerializer
 from authentication.tokens import create_access_token, create_refresh_token
 from core.email_notifications import notify_new_potential_client
+from core.mail_background import run_in_background
 
 
 def _google_signin_consent_is_accepted(value) -> bool:
@@ -274,11 +275,14 @@ class GoogleSignInView(APIView):
             _google_auth_flow(last_step)
             customer.save()
 
-            notify_new_potential_client(
-                email=customer.email,
-                username=customer.username,
-                customer_id=customer.id,
-                source="google_signup",
+            run_in_background(
+                lambda: notify_new_potential_client(
+                    email=customer.email,
+                    username=customer.username,
+                    customer_id=customer.id,
+                    source="google_signup",
+                ),
+                thread_name="new_user_notify_email",
             )
 
             last_step = "new_user_create_tokens"
