@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from math import ceil
 from typing import Any, Dict, List, Tuple
 
@@ -93,13 +94,30 @@ class Paginator:
         return items, meta
 
 
-def paginated_response(request: HttpRequest, queryset, serializer_class, many: bool = True):
+def paginated_response(
+    request: HttpRequest,
+    queryset,
+    serializer_class,
+    many: bool = True,
+    *,
+    serializer_context: dict[str, Any] | None = None,
+    build_serializer_context: Callable[[list[Any]], dict[str, Any]] | None = None,
+):
     """
     Common helper for list APIs: paginate queryset and return DRF Response with
     { "results": [...], "meta": { page, page_size, total, total_pages, has_next, has_previous } }.
+
+    ``serializer_context`` is merged into the DRF serializer context as-is.
+    ``build_serializer_context`` receives the paginated ``items`` list (e.g. to batch
+    S3 presigns or other per-page work) and its return value is merged into the context.
     """
     paginator = Paginator(request, queryset)
     items, meta = paginator.paginate()
-    serializer = serializer_class(items, many=many)
+    ctx: dict[str, Any] = {}
+    if serializer_context:
+        ctx.update(serializer_context)
+    if build_serializer_context:
+        ctx.update(build_serializer_context(items))
+    serializer = serializer_class(items, many=many, context=ctx)
     return Response({"results": serializer.data, "meta": meta})
 

@@ -149,7 +149,13 @@ class BusinessListSerializer(BusinessDetailCoreSerializer):
         return str(raw).strip()
 
     def get_logo(self, obj) -> dict:
-        if (getattr(obj, "logo_s3_key", None) or "").strip():
+        key = (getattr(obj, "logo_s3_key", None) or "").strip()
+        if key:
+            by_key = self.context.get("gym_browser_url_by_s3_key")
+            if isinstance(by_key, dict):
+                url = (by_key.get(key) or "").strip()
+                if url:
+                    return {"type": "s3", "url": url, "s3_key": key}
             return business_logo_dict(obj)
         raw = getattr(obj, "_list_logo_url", None)
         if raw is not None and str(raw).strip():

@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from core.authentication import TokenAuthentication, token_auth_error_response
 from core.pagination import paginated_response
 from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_INACTIVE
+from core.s3_gym_images import gym_image_browser_urls_for_keys
 
 from businesses.models import Business
 from businesses.serializers import (
@@ -76,7 +77,21 @@ class BusinessListCreateView(APIView):
             return token_auth_error_response(err)
 
         queryset = _owned_business_list_queryset(customer)
-        return paginated_response(request, queryset, BusinessListSerializer)
+
+        def _batch_logo_urls(items: list) -> dict:
+            keys = [
+                k
+                for b in items
+                if (k := (getattr(b, "logo_s3_key", None) or "").strip())
+            ]
+            return {"gym_browser_url_by_s3_key": gym_image_browser_urls_for_keys(keys)}
+
+        return paginated_response(
+            request,
+            queryset,
+            BusinessListSerializer,
+            build_serializer_context=_batch_logo_urls,
+        )
 
     def post(self, request):
         customer, err = TokenAuthentication().authenticate(request)
