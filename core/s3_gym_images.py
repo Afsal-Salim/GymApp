@@ -294,6 +294,46 @@ def upload_gym_image_to_s3(
     return public_url, key
 
 
+def upload_business_logo_to_s3(
+    *,
+    business_slug: str,
+    file_body: bytes,
+    extension_with_dot: str,
+    content_type: str,
+) -> Tuple[str, str]:
+    """
+    Upload a business logo to ``logos/{slug}/{uuid}{ext}`` in the gym images bucket.
+
+    Returns ``(public_url, s3_key)`` (same shape as gym image uploads).
+    """
+    bucket = (getattr(settings, "AWS_S3_GYM_IMAGES_BUCKET", "") or "").strip()
+
+    if not gym_s3_configured():
+        raise RuntimeError("S3 is not configured (bucket and AWS credentials required).")
+
+    slug_part = _sanitize_slug_for_s3_key(business_slug)
+    ext = extension_with_dot if extension_with_dot.startswith(".") else f".{extension_with_dot}"
+    key = f"logos/{slug_part}/{uuid.uuid4().hex}{ext}"
+
+    client = _s3_client()
+
+    try:
+        client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file_body,
+            ContentType=content_type,
+            CacheControl="max-age=31536000,public",
+        )
+    except (ClientError, BotoCoreError) as e:
+        raise RuntimeError(f"S3 logo upload failed: {e}") from e
+
+    url_region = _resolve_bucket_region_for_public_url(client, bucket)
+    public_url = _public_object_url(bucket=bucket, key=key, region=url_region)
+
+    return public_url, key
+
+
 def delete_gym_image_from_s3(*, s3_key: str) -> None:
     """Remove object from gym bucket. No-op if S3 not configured or ``s3_key`` empty."""
     key = (s3_key or "").strip()

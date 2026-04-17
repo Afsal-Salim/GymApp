@@ -39,11 +39,14 @@ class CrystalWebsiteSetupView(APIView):
             phone=phone,
             address=address,
             location_map_url=location_map_url,
-            website_theme=serializer.validated_data["theme"],
-            website_content=serializer.validated_data["content"],
         )
+        payload = business.website_payload
+        payload.website_theme = serializer.validated_data["theme"]
+        payload.website_content = serializer.validated_data["content"]
+        payload.save(update_fields=["website_theme", "website_content", "updated_at"])
+
         business = (
-            Business.objects.select_related("owner")
+            Business.objects.select_related("owner", "website_payload")
             .prefetch_related(
                 Prefetch(
                     "subscriptions",

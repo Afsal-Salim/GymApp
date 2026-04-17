@@ -1,10 +1,39 @@
 from rest_framework import serializers
 
 from core.phone import normalize_phone_10, normalize_phone_10_or_empty
+from core.s3_gym_images import gym_image_browser_url
 from core.record_status import RECORD_STATUS_CHOICES
 from subscriptions.models import Subscription
 
-from .models import Business, BusinessEnquiry, CrystalLead
+from .models import Business, BusinessEnquiry, BusinessWebsitePayload, CrystalLead
+
+
+def _website_content_dict(business) -> dict:
+    p = getattr(business, "website_payload", None)
+    if p is None:
+        return {}
+    wc = p.website_content
+    return wc if isinstance(wc, dict) else {}
+
+
+def business_logo_dict(business) -> dict:
+    """
+    Unified logo payload for list/detail/public APIs.
+
+    - ``type`` ``"s3"``: owner uploaded via POST …/logo/; ``url`` is browser-safe (presigned when configured).
+    - ``type`` ``"url"``: external or builder URL from ``website_content.logo.src`` (no S3 key).
+    - ``type`` ``null``: no logo configured.
+    """
+    key = (getattr(business, "logo_s3_key", None) or "").strip()
+    if key:
+        url = gym_image_browser_url(key) or ""
+        return {"type": "s3", "url": url, "s3_key": key}
+    wc = _website_content_dict(business)
+    logo = wc.get("logo") if isinstance(wc.get("logo"), dict) else {}
+    src = (logo.get("src") or "").strip() if isinstance(logo, dict) else ""
+    if src:
+        return {"type": "url", "url": src, "s3_key": None}
+    return {"type": None, "url": "", "s3_key": None}
 
 
 class SubscriptionListSerializer(serializers.ModelSerializer):
@@ -30,6 +59,9 @@ class BusinessSerializer(serializers.ModelSerializer):
     owner_email = serializers.SerializerMethodField()
     owner_username = serializers.SerializerMethodField()
     subscriptions = SubscriptionListSerializer(many=True, read_only=True)
+    logo = serializers.SerializerMethodField()
+    website_theme = serializers.SerializerMethodField()
+    website_content = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -44,6 +76,7 @@ class BusinessSerializer(serializers.ModelSerializer):
             "phone",
             "address",
             "location_map_url",
+            "logo",
             "website_theme",
             "website_content",
             "subscriptions",
@@ -51,6 +84,19 @@ class BusinessSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "owner", "created_at", "updated_at")
+
+    def get_website_theme(self, obj):
+        p = getattr(obj, "website_payload", None)
+        if p is None:
+            return {}
+        wt = p.website_theme
+        return wt if isinstance(wt, dict) else {}
+
+    def get_website_content(self, obj):
+        return _website_content_dict(obj)
+
+    def get_logo(self, obj):
+        return business_logo_dict(obj)
 
     def get_owner_email(self, obj):
         return obj.owner.email if obj.owner_id else None
@@ -77,6 +123,7 @@ class BusinessDetailCoreSerializer(BusinessSerializer):
             "phone",
             "address",
             "location_map_url",
+            "logo",
             "subscriptions",
             "created_at",
             "updated_at",
@@ -90,9 +137,10 @@ class BusinessListSerializer(BusinessDetailCoreSerializer):
     """
 
     logo_url = serializers.SerializerMethodField()
+    logo = serializers.SerializerMethodField()
 
     class Meta(BusinessDetailCoreSerializer.Meta):
-        fields = (*BusinessDetailCoreSerializer.Meta.fields, "logo_url")
+        fields = (*BusinessDetailCoreSerializer.Meta.fields, "logo_url", "logo")
 
     def get_logo_url(self, obj) -> str:
         raw = getattr(obj, "_list_logo_url", None)
@@ -100,11 +148,27 @@ class BusinessListSerializer(BusinessDetailCoreSerializer):
             return ""
         return str(raw).strip()
 
+    def get_logo(self, obj) -> dict:
+        if (getattr(obj, "logo_s3_key", None) or "").strip():
+            return business_logo_dict(obj)
+        raw = getattr(obj, "_list_logo_url", None)
+        if raw is not None and str(raw).strip():
+            return {
+                "type": "url",
+                "url": str(raw).strip(),
+                "s3_key": None,
+            }
+        return {"type": None, "url": "", "s3_key": None}
+
 
 class BusinessPublicSerializer(serializers.ModelSerializer):
     """
     Public business profile (no owner identifiers). For gym pages / shareable links by slug.
     """
+
+    logo = serializers.SerializerMethodField()
+    website_theme = serializers.SerializerMethodField()
+    website_content = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -116,12 +180,26 @@ class BusinessPublicSerializer(serializers.ModelSerializer):
             "phone",
             "address",
             "location_map_url",
+            "logo",
             "website_theme",
             "website_content",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    def get_website_theme(self, obj):
+        p = getattr(obj, "website_payload", None)
+        if p is None:
+            return {}
+        wt = p.website_theme
+        return wt if isinstance(wt, dict) else {}
+
+    def get_website_content(self, obj):
+        return _website_content_dict(obj)
+
+    def get_logo(self, obj):
+        return business_logo_dict(obj)
 
 
 class BusinessCreateSerializer(serializers.ModelSerializer):
@@ -158,6 +236,21 @@ class BusinessUpdateSerializer(serializers.ModelSerializer):
             "website_theme",
             "website_content",
         )
+
+    def update(self, instance, validated_data):
+        theme = validated_data.pop("website_theme", None)
+        content = validated_data.pop("website_content", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if theme is not None or content is not None:
+            payload, _ = BusinessWebsitePayload.objects.get_or_create(business=instance)
+            if theme is not None:
+                payload.website_theme = theme
+            if content is not None:
+                payload.website_content = content
+            payload.save()
+        return instance
 
     def validate_slug(self, value):
         qs = Business.objects.filter(slug=value)

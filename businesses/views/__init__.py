@@ -27,6 +27,7 @@ from .crystal import (
 )
 from .website_setup import CrystalWebsiteSetupView
 from .gym_images import GymImageDeleteView, GymImagesView
+from .business_logo import BusinessLogoView
 
 __all__ = [
     "WebsiteAnalyticsOverviewView",
@@ -48,4 +49,5 @@ __all__ = [
     "CrystalWebsiteSetupView",
     "GymImagesView",
     "GymImageDeleteView",
+    "BusinessLogoView",
 ]

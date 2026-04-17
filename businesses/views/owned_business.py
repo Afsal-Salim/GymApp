@@ -1,8 +1,10 @@
+from django.db.models import Prefetch
 from rest_framework import status
 from rest_framework.response import Response
 
 from businesses.models import Business
 from core.record_status import RECORD_STATUS_ACTIVE
+from subscriptions.models import Subscription
 
 
 def get_owned_business(
@@ -20,21 +22,37 @@ def get_owned_business(
     are treated as missing. Use ``require_active=False`` for record-status /
     reactivation flows.
 
-    When ``with_serializer_relations`` is True, loads ``owner`` and
-    ``subscriptions`` + ``plan`` in the same query round-trips (for
-    ``BusinessSerializer`` / detail PATCH responses) instead of a follow-up fetch.
+    When ``with_serializer_relations`` is True, loads ``subscriptions`` + ``plan``
+    in the same query round-trips (for ``BusinessSerializer`` / detail PATCH responses).
 
-    When ``defer_website_payload`` is True, ``website_content`` and ``website_theme``
-    are not loaded from the DB (use with a serializer that omits those fields).
+    When ``defer_website_payload`` is True, large JSON on ``BusinessWebsitePayload``
+    is not loaded (use with a serializer that omits ``website_theme`` / ``website_content``).
     """
     try:
         qs = Business.objects.filter(slug=slug, owner_id=customer.id)
         if require_active:
             qs = qs.filter(record_status=RECORD_STATUS_ACTIVE)
-        if with_serializer_relations:
-            qs = qs.select_related("owner").prefetch_related("subscriptions__plan")
+
+        qs = qs.select_related("owner")
+
         if defer_website_payload:
-            qs = qs.defer("website_content", "website_theme")
+            qs = qs.select_related("website_payload").defer(
+                "website_payload__website_content",
+                "website_payload__website_theme",
+            )
+        elif with_serializer_relations:
+            qs = qs.select_related("website_payload")
+
+        if with_serializer_relations:
+            qs = qs.prefetch_related(
+                Prefetch(
+                    "subscriptions",
+                    queryset=Subscription.objects.select_related("plan").order_by(
+                        "-subscription_end_date"
+                    ),
+                )
+            )
+
         business = qs.get()
     except Business.DoesNotExist:
         return None, Response(

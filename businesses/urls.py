@@ -84,6 +84,11 @@ urlpatterns = [
         views.GymImagesView.as_view(),
         name="business-gym-images",
     ),
+    path(
+        "<slug:slug>/logo/",
+        views.BusinessLogoView.as_view(),
+        name="business-logo",
+    ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(
         "<slug:slug>/active-subscription/",

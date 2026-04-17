@@ -1,9 +1,35 @@
 from math import ceil
 from typing import Any, Dict, List, Tuple
 
+from django.db import connection
+from django.db.models import IntegerField
+from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
 
 from rest_framework.response import Response
+
+
+def _paginate_with_window_aggregate(queryset, page: int, page_size: int) -> Tuple[List[Any], int] | None:
+    """
+    PostgreSQL: one round-trip for both the page rows and total row count using
+    ``COUNT(*) OVER ()``. Falls back to None when not supported.
+    """
+    if connection.vendor != "postgresql":
+        return None
+    start = (page - 1) * page_size
+    end = start + page_size
+    qs = queryset.annotate(
+        _pg_pagination_total=RawSQL(
+            "(COUNT(*) OVER ())::integer",
+            [],
+            output_field=IntegerField(),
+        )
+    )
+    rows = list(qs[start:end])
+    if rows:
+        return rows, int(rows[0]._pg_pagination_total)
+    # Empty slice: need total (e.g. page past end or no rows)
+    return [], queryset.count()
 
 
 class Paginator:
@@ -44,12 +70,17 @@ class Paginator:
 
     def paginate(self) -> Tuple[List[Any], Dict[str, Any]]:
         page, page_size = self._get_page_params()
-        total = self.queryset.count()
-        total_pages = ceil(total / page_size) if total else 1
-
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = list(self.queryset[start:end])
+        total_pages: int
+        windowed = _paginate_with_window_aggregate(self.queryset, page, page_size)
+        if windowed is not None:
+            items, total = windowed
+            total_pages = ceil(total / page_size) if total else 1
+        else:
+            total = self.queryset.count()
+            total_pages = ceil(total / page_size) if total else 1
+            start = (page - 1) * page_size
+            end = start + page_size
+            items = list(self.queryset[start:end])
 
         meta = {
             "page": page,

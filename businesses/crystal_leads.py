@@ -313,39 +313,14 @@ def website_analytics_for_business(business, range_preset: str = DEFAULT_ANALYTI
 
     ``range_preset`` must be a key in ANALYTICS_RANGE_PRESETS (1d–3m). Drives
     ``line_graph``, ``totals_in_range``, and ``leads_by_type_in_range``.
+
+    Implementation delegates to :func:`websites_analytics_overview` so the per-slug
+    endpoint uses the same batched query plan as the multi-site overview (constant
+    query count, not one separate round-trip per sub-aggregation).
     """
     preset = range_preset if range_preset in ANALYTICS_RANGE_PRESETS else DEFAULT_ANALYTICS_RANGE
-    line_graph, range_start, range_end = line_graph_series_for_business(business, preset)
-
-    qs = CrystalLead.objects.filter(business=business)
-    all_time = qs.aggregate(lead_events=Count("id"), units=Sum("quantity"))
-
-    return {
-        "business": {
-            "slug": business.slug,
-            "name": business.name,
-        },
-        "time_range": {
-            "preset": preset,
-            "label": ANALYTICS_RANGE_LABELS.get(preset, preset),
-            "start": range_start.isoformat(),
-            "end": range_end.isoformat(),
-            "bucket": "hour" if preset == "1d" else "day",
-            "allowed_presets": sorted(ANALYTICS_RANGE_PRESETS.keys()),
-        },
-        "line_graph": line_graph,
-        "totals_in_range": totals_in_range(business, range_start, range_end),
-        "leads_by_type_in_range": lead_event_counts_by_type_in_range(
-            business, range_start, range_end
-        ),
-        "whatsapp": whatsapp_analytics_for_business(business),
-        "leads_by_type": lead_event_counts_by_type(business),
-        "totals": {
-            "lead_events": all_time["lead_events"] or 0,
-            "units": int(all_time["units"] or 0),
-        },
-        "computed_at": timezone.now().isoformat(),
-    }
+    rows = websites_analytics_overview([business], range_preset=preset)
+    return rows[0]
 
 
 def websites_analytics_overview(businesses, range_preset: str = DEFAULT_ANALYTICS_RANGE):

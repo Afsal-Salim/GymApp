@@ -40,7 +40,11 @@ class BusinessEnquiry(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["business", "-created_at"]),
+            # Owner list: WHERE business_id = ? AND record_status = ? ORDER BY created_at DESC
+            models.Index(
+                fields=["business", "record_status", "-created_at"],
+                name="biz_enquiry_biz_rs_crt_idx",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -48,6 +52,11 @@ class BusinessEnquiry(models.Model):
 
 
 class Business(models.Model):
+    """
+    Core gym row (identity, contact, status). Heavy Crystal builder JSON lives in
+    :class:`BusinessWebsitePayload` so list/join queries avoid loading megabytes of JSON.
+    """
+
     owner = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="businesses")
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
@@ -59,8 +68,12 @@ class Business(models.Model):
     )
     address = models.TextField(blank=True)
     location_map_url = models.URLField(max_length=2000, blank=True)
-    website_theme = models.JSONField(default=dict, blank=True)
-    website_content = models.JSONField(default=dict, blank=True)
+    logo_s3_key = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="S3 object key for owner-uploaded logo (logos/<slug>/<uuid>.ext). Empty if using website_content only.",
+    )
     record_status = models.CharField(
         max_length=16,
         choices=RECORD_STATUS_CHOICES,
@@ -70,8 +83,36 @@ class Business(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["owner", "record_status"],
+                name="business_owner_status_idx",
+            ),
+        ]
+
     def __str__(self) -> str:
         return self.name
+
+
+class BusinessWebsitePayload(models.Model):
+    """
+    Crystal website theme + content (large JSON). One row per business; optional so
+    legacy code paths can use ``get_or_create``. API responses still expose
+    ``website_theme`` / ``website_content`` on the business object via serializers.
+    """
+
+    business = models.OneToOneField(
+        Business,
+        on_delete=models.CASCADE,
+        related_name="website_payload",
+    )
+    website_theme = models.JSONField(default=dict, blank=True)
+    website_content = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"WebsitePayload({self.business.slug})"
 
 
 class CrystalLead(models.Model):
@@ -120,6 +161,11 @@ class CrystalLead(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["business", "lead_type", "-created_at"]),
+            # Range filters for analytics: WHERE business_id = ? AND created_at >= ? AND created_at <= ?
+            models.Index(
+                fields=["business", "created_at"],
+                name="crystallead_biz_created_idx",
+            ),
         ]
 
     def __str__(self) -> str:

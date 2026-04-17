@@ -34,19 +34,22 @@ from subscriptions.serializers import CurrentSubscriptionSerializer
 
 def _owned_business_list_queryset(customer):
     """
-    List queryset: avoid loading huge ``website_content`` / ``website_theme`` JSON into Python,
-    while still exposing ``logo_url`` for the dashboard (JSON path in SQL).
+    List queryset: Crystal JSON lives on ``BusinessWebsitePayload``; defer those
+    blobs in Python while still annotating ``logo_url`` from ``logo.src`` in SQL.
     """
     logo_src = KeyTextTransform(
         "src",
-        KeyTransform("logo", "website_content"),
+        KeyTransform("logo", "website_payload__website_content"),
         output_field=TextField(),
     )
     return (
         Business.objects.filter(owner=customer, record_status=RECORD_STATUS_ACTIVE)
-        .select_related("owner")
+        .select_related("owner", "website_payload")
         .annotate(_list_logo_url=logo_src)
-        .defer("website_content", "website_theme")
+        .defer(
+            "website_payload__website_content",
+            "website_payload__website_theme",
+        )
         .prefetch_related(
             Prefetch(
                 "subscriptions",
@@ -86,7 +89,7 @@ class BusinessListCreateView(APIView):
 
         business = serializer.save(owner=customer)
         refreshed = (
-            Business.objects.select_related("owner")
+            Business.objects.select_related("owner", "website_payload")
             .prefetch_related(
                 Prefetch(
                     "subscriptions",
@@ -201,7 +204,8 @@ class BusinessRecordStatusView(APIView):
         business.record_status = new_status
         business.save(update_fields=["record_status", "updated_at"])
         updated = (
-            Business.objects.prefetch_related("subscriptions__plan")
+            Business.objects.select_related("owner", "website_payload")
+            .prefetch_related("subscriptions__plan")
             .get(pk=business.pk)
         )
         return Response(BusinessSerializer(updated).data, status=status.HTTP_200_OK)
@@ -278,7 +282,7 @@ class BusinessPublicBySlugView(APIView):
 
     def get(self, request, slug):
         try:
-            business = active_businesses().get(slug=slug)
+            business = active_businesses().select_related("website_payload").get(slug=slug)
         except Business.DoesNotExist:
             return Response(
                 {"detail": "No business found for this slug.", "slug": slug},
