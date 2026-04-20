@@ -20,7 +20,7 @@ def business_logo_dict(business) -> dict:
     """
     Unified logo payload for list/detail/public APIs.
 
-    - ``type`` ``"s3"``: owner uploaded via POST …/logo/; ``url`` is browser-safe (presigned when configured).
+    - ``type`` ``"s3"``: owner uploaded via POST …/images/ with ``asset_type=logo``; ``url`` is browser-safe (presigned when configured).
     - ``type`` ``"url"``: external or builder URL from ``website_content.logo.src`` (no S3 key).
     - ``type`` ``null``: no logo configured.
     """
@@ -130,41 +130,27 @@ class BusinessDetailCoreSerializer(BusinessSerializer):
         )
 
 
-class BusinessListSerializer(BusinessDetailCoreSerializer):
+class BusinessListSerializer(serializers.ModelSerializer):
     """
-    Owner paginated list: same as ``BusinessDetailCoreSerializer`` plus ``logo_url``
-    (from ``website_content.logo.src`` via DB annotation — no full ``website_content`` load).
+    Owner list (GET /api/businesses/): minimal fields only.
+
+    ``subscription_end_date`` is the latest active subscription row’s end date (annotated).
+    ``total_leads`` / ``whatsapp_clicks`` are annotated on the queryset.
     """
 
-    logo_url = serializers.SerializerMethodField()
-    logo = serializers.SerializerMethodField()
+    subscription_end_date = serializers.DateField(allow_null=True, read_only=True)
+    total_leads = serializers.IntegerField(read_only=True)
+    whatsapp_clicks = serializers.IntegerField(read_only=True)
 
-    class Meta(BusinessDetailCoreSerializer.Meta):
-        fields = (*BusinessDetailCoreSerializer.Meta.fields, "logo_url", "logo")
-
-    def get_logo_url(self, obj) -> str:
-        raw = getattr(obj, "_list_logo_url", None)
-        if raw is None:
-            return ""
-        return str(raw).strip()
-
-    def get_logo(self, obj) -> dict:
-        key = (getattr(obj, "logo_s3_key", None) or "").strip()
-        if key:
-            by_key = self.context.get("gym_browser_url_by_s3_key")
-            if isinstance(by_key, dict):
-                url = (by_key.get(key) or "").strip()
-                if url:
-                    return {"type": "s3", "url": url, "s3_key": key}
-            return business_logo_dict(obj)
-        raw = getattr(obj, "_list_logo_url", None)
-        if raw is not None and str(raw).strip():
-            return {
-                "type": "url",
-                "url": str(raw).strip(),
-                "s3_key": None,
-            }
-        return {"type": None, "url": "", "s3_key": None}
+    class Meta:
+        model = Business
+        fields = (
+            "name",
+            "slug",
+            "subscription_end_date",
+            "total_leads",
+            "whatsapp_clicks",
+        )
 
 
 class BusinessPublicSerializer(serializers.ModelSerializer):
@@ -229,6 +215,10 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
 
 class BusinessUpdateSerializer(serializers.ModelSerializer):
     """Partial or full update of an owned business (PATCH)."""
+
+    # Stored on ``BusinessWebsitePayload``, not ``Business`` — must be explicit fields.
+    website_theme = serializers.JSONField(required=False, allow_null=True)
+    website_content = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
         model = Business

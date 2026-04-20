@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple
 from django.db import connection
 from django.db.models import IntegerField
 from django.db.models.expressions import RawSQL
+from django.db.utils import ProgrammingError
 from django.http import HttpRequest
 
 from rest_framework.response import Response
@@ -26,7 +27,14 @@ def _paginate_with_window_aggregate(queryset, page: int, page_size: int) -> Tupl
             output_field=IntegerField(),
         )
     )
-    rows = list(qs[start:end])
+    try:
+        rows = list(qs[start:end])
+    except ProgrammingError as e:
+        # Some grouped/aggregated querysets cannot combine with window annotations.
+        # Fall back to the standard count + slice pagination path.
+        if "window functions are not allowed in GROUP BY" in str(e):
+            return None
+        raise
     if rows:
         return rows, int(rows[0]._pg_pagination_total)
     # Empty slice: need total (e.g. page past end or no rows)

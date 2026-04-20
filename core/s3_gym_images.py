@@ -17,6 +17,15 @@ from core.logging import app_logger
 
 _SLUG_SAFE = re.compile(r"^[-a-zA-Z0-9_]+$")
 
+# S3 key prefix per gym image ``asset_type`` (``{folder}/{slug}/{uuid}.ext``).
+_GYM_ASSET_TYPE_FOLDER: dict[str, str] = {
+    "logo": "logo",
+    "dp": "dp",
+    "hero": "hero",
+    "background": "background",
+    "gallery": "gallery",
+}
+
 # SigV4 so presigned GET uses X-Amz-Expires (seconds). Legacy SigV2 URLs use a far-future Unix Expires= timestamp.
 _S3_CLIENT_CONFIG = Config(signature_version="s3v4")
 
@@ -260,9 +269,13 @@ def upload_gym_image_to_s3(
     file_body: bytes,
     extension_with_dot: str,
     content_type: str,
+    asset_type: str = "gallery",
 ) -> Tuple[str, str]:
     """
-    Upload bytes to ``{slug}/{uuid}{ext}``.
+    Upload bytes under a type folder: ``{asset_type_folder}/{slug}/{uuid}{ext}``.
+
+    Folders: ``logo``, ``dp``, ``hero``, ``background``, ``gallery`` (see ``_GYM_ASSET_TYPE_FOLDER``).
+    Unknown ``asset_type`` falls back to ``gallery``.
 
     Returns ``(public_url, s3_key)``.
     """
@@ -273,7 +286,10 @@ def upload_gym_image_to_s3(
 
     slug_part = _sanitize_slug_for_s3_key(business_slug)
     ext = extension_with_dot if extension_with_dot.startswith(".") else f".{extension_with_dot}"
-    key = f"{slug_part}/{uuid.uuid4().hex}{ext}"
+    folder = _GYM_ASSET_TYPE_FOLDER.get(
+        (asset_type or "gallery").strip().lower(), "gallery"
+    )
+    key = f"{folder}/{slug_part}/{uuid.uuid4().hex}{ext}"
 
     client = _s3_client()
 

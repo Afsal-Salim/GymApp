@@ -1,5 +1,5 @@
-from django.db.models import Prefetch, TextField
-from django.db.models.fields.json import KeyTextTransform, KeyTransform
+from django.db.models import Count, DateField, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,9 +7,8 @@ from rest_framework.views import APIView
 from core.authentication import TokenAuthentication, token_auth_error_response
 from core.pagination import paginated_response
 from core.record_status import RECORD_STATUS_ACTIVE, RECORD_STATUS_INACTIVE
-from core.s3_gym_images import gym_image_browser_urls_for_keys
 
-from businesses.models import Business
+from businesses.models import Business, CrystalLead
 from businesses.serializers import (
     BusinessCreateSerializer,
     BusinessDetailCoreSerializer,
@@ -32,32 +31,51 @@ from subscriptions.models import Subscription
 from subscriptions.trial_subscription import business_has_non_trial_subscription
 from subscriptions.serializers import CurrentSubscriptionSerializer
 
+# Modal Crystal leads (join / trial / visit) — excludes WhatsApp click rows.
+_CRYSTAL_MODAL_LEAD_TYPES = (
+    CrystalLead.LEAD_JOIN_NOW,
+    CrystalLead.LEAD_BOOK_FREE_TRIAL,
+    CrystalLead.LEAD_PLAN_VISIT,
+)
+
 
 def _owned_business_list_queryset(customer):
     """
-    List queryset: Crystal JSON lives on ``BusinessWebsitePayload``; defer those
-    blobs in Python while still annotating ``logo_url`` from ``logo.src`` in SQL.
+    Minimal columns for GET /api/businesses/: lead counts, WhatsApp units, latest sub end date.
     """
-    logo_src = KeyTextTransform(
-        "src",
-        KeyTransform("logo", "website_payload__website_content"),
-        output_field=TextField(),
+    latest_sub_end = (
+        Subscription.objects.filter(
+            business_id=OuterRef("pk"),
+            record_status=RECORD_STATUS_ACTIVE,
+        )
+        .order_by("-subscription_end_date")
+        .values("subscription_end_date")[:1]
     )
     return (
         Business.objects.filter(owner=customer, record_status=RECORD_STATUS_ACTIVE)
-        .select_related("owner", "website_payload")
-        .annotate(_list_logo_url=logo_src)
-        .defer(
-            "website_payload__website_content",
-            "website_payload__website_theme",
-        )
-        .prefetch_related(
-            Prefetch(
-                "subscriptions",
-                queryset=Subscription.objects.select_related("plan").order_by(
-                    "-subscription_end_date"
+        .annotate(
+            subscription_end_date=Subquery(
+                latest_sub_end,
+                output_field=DateField(),
+            ),
+            total_leads=Count(
+                "crystal_leads",
+                filter=Q(
+                    crystal_leads__record_status=RECORD_STATUS_ACTIVE,
+                    crystal_leads__lead_type__in=_CRYSTAL_MODAL_LEAD_TYPES,
                 ),
-            )
+            ),
+            whatsapp_clicks=Coalesce(
+                Sum(
+                    "crystal_leads__quantity",
+                    filter=Q(
+                        crystal_leads__record_status=RECORD_STATUS_ACTIVE,
+                        crystal_leads__lead_type=CrystalLead.LEAD_WHATSAPP_CLICK,
+                    ),
+                    output_field=IntegerField(),
+                ),
+                Value(0),
+            ),
         )
         .order_by("-created_at")
     )
@@ -66,7 +84,9 @@ def _owned_business_list_queryset(customer):
 class BusinessListCreateView(APIView):
     """
     GET  /api/businesses/
-        List all businesses owned by the authenticated customer.
+        Paginated list for the authenticated owner. Each row: ``name``, ``slug``,
+        ``subscription_end_date`` (latest active subscription), ``total_leads``,
+        ``whatsapp_clicks`` only.
     POST /api/businesses/
         Create a new business (owner = authenticated customer).
     """
@@ -77,21 +97,7 @@ class BusinessListCreateView(APIView):
             return token_auth_error_response(err)
 
         queryset = _owned_business_list_queryset(customer)
-
-        def _batch_logo_urls(items: list) -> dict:
-            keys = [
-                k
-                for b in items
-                if (k := (getattr(b, "logo_s3_key", None) or "").strip())
-            ]
-            return {"gym_browser_url_by_s3_key": gym_image_browser_urls_for_keys(keys)}
-
-        return paginated_response(
-            request,
-            queryset,
-            BusinessListSerializer,
-            build_serializer_context=_batch_logo_urls,
-        )
+        return paginated_response(request, queryset, BusinessListSerializer)
 
     def post(self, request):
         customer, err = TokenAuthentication().authenticate(request)

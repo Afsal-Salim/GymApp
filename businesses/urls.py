@@ -75,19 +75,9 @@ urlpatterns = [
         name="business-first-recharge",
     ),
     path(
-        "<slug:slug>/images/<int:pk>/",
-        views.GymImageDeleteView.as_view(),
-        name="business-gym-image-delete",
-    ),
-    path(
         "<slug:slug>/images/",
         views.GymImagesView.as_view(),
         name="business-gym-images",
-    ),
-    path(
-        "<slug:slug>/logo/",
-        views.BusinessLogoView.as_view(),
-        name="business-logo",
     ),
     path("<slug:slug>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path(
