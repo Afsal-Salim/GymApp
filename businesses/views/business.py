@@ -1,4 +1,15 @@
-from django.db.models import Count, DateField, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import (
+    Count,
+    DateField,
+    F,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.response import Response
@@ -77,7 +88,10 @@ def _owned_business_list_queryset(customer):
                 Value(0),
             ),
         )
-        .order_by("-created_at")
+        .order_by(
+            F("subscription_end_date").desc(nulls_last=True),
+            "-created_at",
+        )
     )
 
 
@@ -86,7 +100,8 @@ class BusinessListCreateView(APIView):
     GET  /api/businesses/
         Paginated list for the authenticated owner. Each row: ``name``, ``slug``,
         ``subscription_end_date`` (latest active subscription), ``total_leads``,
-        ``whatsapp_clicks`` only.
+        ``whatsapp_clicks`` only. Sorted by latest ``subscription_end_date`` first
+        (no subscription last), then by ``created_at``.
     POST /api/businesses/
         Create a new business (owner = authenticated customer).
     """
@@ -346,39 +361,28 @@ class CurrentSubscriptionDetailView(APIView):
 class BusinessActiveSubscriptionView(APIView):
     """
     GET /api/businesses/<slug>/active-subscription/
-        Public: whether the gym has an active subscription, end date, and plan
-        summary (trial / starter / pro tier, duration, price, features).
-        Active = subscription_end_date >= today.
+
+    Public. Returns: ``slug``, ``is_active``, ``has_active_subscription``,
+    ``subscription_start_date``, ``subscription_end_date``, ``plan_name``, ``plan_tier``.
+    Active = subscription_end_date >= today.
     """
 
     def get(self, request, slug):
         active, not_found = get_active_public_subscription_for_slug(slug)
+        empty = {
+            "slug": slug,
+            "is_active": False,
+            "has_active_subscription": False,
+            "subscription_start_date": None,
+            "subscription_end_date": None,
+            "plan_name": None,
+            "plan_tier": None,
+        }
         if not_found:
-            return Response(
-                {
-                    "detail": "Not found.",
-                    "slug": slug,
-                    "is_active": False,
-                    "has_active_subscription": False,
-                    "subscription_end_date": None,
-                    "plan_tier": None,
-                    "subscription": None,
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response(empty, status=status.HTTP_404_NOT_FOUND)
 
         if not active:
-            return Response(
-                {
-                    "slug": slug,
-                    "is_active": False,
-                    "has_active_subscription": False,
-                    "subscription_end_date": None,
-                    "plan_tier": None,
-                    "subscription": None,
-                },
-                status=status.HTTP_200_OK,
-            )
+            return Response(empty, status=status.HTTP_200_OK)
 
         detail = public_active_subscription_payload(active)
         return Response(
@@ -386,9 +390,10 @@ class BusinessActiveSubscriptionView(APIView):
                 "slug": slug,
                 "is_active": True,
                 "has_active_subscription": True,
+                "subscription_start_date": detail["subscription_start_date"],
                 "subscription_end_date": detail["subscription_end_date"],
+                "plan_name": detail["plan_name"],
                 "plan_tier": detail["plan_tier"],
-                "subscription": detail,
             },
             status=status.HTTP_200_OK,
         )
